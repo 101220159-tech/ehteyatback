@@ -10,7 +10,15 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 class Provider extends Model
 {
     protected $fillable = [
-        'user_id', 'bio', 'experience_years', 'rating_avg', 'total_reviews',
+        'user_id',
+        'bio',
+        'experience_years',
+        'rating_avg',
+        'total_reviews',
+        // Verification workflow fields (may exist depending on which migrations were applied).
+        'status',
+        'is_verified',
+        'verified_at',
     ];
 
     protected function casts(): array
@@ -19,6 +27,8 @@ class Provider extends Model
             'experience_years' => 'integer',
             'rating_avg' => 'decimal:2',
             'total_reviews' => 'integer',
+            'is_verified' => 'boolean',
+            'verified_at' => 'datetime',
         ];
     }
 

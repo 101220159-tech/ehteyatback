@@ -11,6 +11,14 @@ class ProjectRequest extends FormRequest
         return true;
     }
 
+    protected function prepareForValidation(): void
+    {
+        // Frontends may send `name`; backend persists `title`.
+        if (! $this->filled('title') && $this->filled('name')) {
+            $this->merge(['title' => $this->input('name')]);
+        }
+    }
+
     /**
      * @return array<string, mixed>
      */
@@ -22,9 +30,8 @@ class ProjectRequest extends FormRequest
             'title' => $updating ? ['sometimes', 'string', 'max:255'] : ['required', 'string', 'max:255'],
             'description' => ['nullable', 'string'],
             'image' => ['nullable', 'image', 'max:5120', 'dimensions:max_width=8000,max_height=8000'],
-            'image_url' => $updating
-                ? ['nullable', 'string', 'max:2048']
-                : ['nullable', 'string', 'max:2048', 'required_without:image'],
+            // Optional: projects can be created first, then images uploaded via /projects/{id}/images.
+            'image_url' => ['nullable', 'string', 'max:2048'],
         ];
     }
 }

@@ -16,10 +16,31 @@ class SearchService
         $lat = isset($filters['latitude']) ? (float) $filters['latitude'] : null;
         $lng = isset($filters['longitude']) ? (float) $filters['longitude'] : null;
         $radiusKm = isset($filters['radius_km']) ? (float) $filters['radius_km'] : null;
+        $keyword = isset($filters['keyword']) ? trim((string) $filters['keyword']) : null;
 
         $query = Provider::query()
-            ->with(['user:id,name,email,latitude,longitude'])
+            ->with(['user:id,name,email,phone,latitude,longitude'])
+            ->with(['services.category'])
             ->withCount('reviews');
+
+        if ($keyword !== null && $keyword !== '') {
+            $like = '%'.$keyword.'%';
+            $query->where(function (Builder $q) use ($like) {
+                $q->where('providers.bio', 'like', $like)
+                    ->orWhereHas('user', function (Builder $uq) use ($like) {
+                        $uq->where('users.name', 'like', $like)
+                            ->orWhere('users.phone', 'like', $like)
+                            ->orWhere('users.email', 'like', $like);
+                    })
+                    ->orWhereHas('services', function (Builder $sq) use ($like) {
+                        $sq->where('services.name', 'like', $like)
+                            ->orWhere('services.description', 'like', $like)
+                            ->orWhereHas('category', function (Builder $cq) use ($like) {
+                                $cq->where('service_categories.name', 'like', $like);
+                            });
+                    });
+            });
+        }
 
         if (! empty($filters['category_id'])) {
             $categoryId = (int) $filters['category_id'];

@@ -19,7 +19,14 @@ class ProviderResource extends JsonResource
             'experience_years' => $this->experience_years,
             'rating_avg' => $this->rating_avg,
             'total_reviews' => $this->whenCounted('reviews'),
+            'status' => $this->status,
+            'is_verified' => $this->is_verified,
+            'verified_at' => $this->verified_at,
             'distance_km' => $this->when(isset($this->distance_km), $this->distance_km),
+            // Used by the map UI to place markers.
+            // Note: lat/lng live on the related `users` table.
+            'latitude' => $this->when($this->relationLoaded('user'), $this->user?->latitude),
+            'longitude' => $this->when($this->relationLoaded('user'), $this->user?->longitude),
             'user' => new UserResource($this->whenLoaded('user')),
             'services' => ServiceResource::collection($this->whenLoaded('services')),
             'projects' => ProjectResource::collection($this->whenLoaded('projects')),

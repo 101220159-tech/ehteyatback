@@ -7,17 +7,21 @@ use App\Http\Controllers\Api\V1\Admin\AdminDashboardController;
 use App\Http\Controllers\Api\V1\Admin\AdminNotificationController;
 use App\Http\Controllers\Api\V1\Admin\AdminPermissionController;
 use App\Http\Controllers\Api\V1\Admin\AdminProviderController;
+use App\Http\Controllers\Api\V1\Admin\AdminProviderProjectController;
 use App\Http\Controllers\Api\V1\Admin\AdminReviewController;
 use App\Http\Controllers\Api\V1\Admin\AdminRoleController;
 use App\Http\Controllers\Api\V1\Admin\AdminServiceController;
 use App\Http\Controllers\Api\V1\Admin\AdminUserController;
 use App\Http\Controllers\Api\V1\AuthController;
+use App\Http\Controllers\Api\V1\MapsController;
 use App\Http\Controllers\Api\V1\Customer\CustomerBookingController;
 use App\Http\Controllers\Api\V1\Customer\CustomerChatController;
 use App\Http\Controllers\Api\V1\Customer\CustomerDashboardController;
+use App\Http\Controllers\Api\V1\Customer\CustomerAddressController;
 use App\Http\Controllers\Api\V1\Customer\CustomerNotificationController;
 use App\Http\Controllers\Api\V1\Customer\CustomerReviewController;
 use App\Http\Controllers\Api\V1\Customer\SearchController;
+use App\Http\Controllers\Api\V1\Customer\CustomerProfileController;
 use App\Http\Controllers\Api\V1\Provider\ProviderAvailabilityController;
 use App\Http\Controllers\Api\V1\Provider\ProviderBookingController;
 use App\Http\Controllers\Api\V1\Provider\ProviderChatController;
@@ -75,6 +79,11 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
         Route::get('services/{id}', [ServiceController::class, 'show'])->whereNumber('id');
         Route::get('providers', [PublicProviderController::class, 'index']);
         Route::get('providers/{id}', [PublicProviderController::class, 'show'])->whereNumber('id');
+
+        // Google Maps APIs (backend proxy).
+        Route::get('maps/geocode', [MapsController::class, 'geocode']);
+        Route::get('maps/places-autocomplete', [MapsController::class, 'placesAutocomplete']);
+        Route::get('maps/distance-matrix', [MapsController::class, 'distanceMatrix']);
     });
 
     Route::middleware(['auth:sanctum', 'throttle:api'])->group(function () {
@@ -87,7 +96,7 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
         Route::post('user/fcm-token', [AuthController::class, 'saveFcmToken']);
     });
 
-    Route::middleware(['auth:sanctum', 'verified', 'role:customer', 'throttle:api'])->prefix('customer')->group(function () {
+    Route::middleware(['auth:sanctum', 'role:customer', 'throttle:api'])->prefix('customer')->group(function () {
         Route::get('dashboard', [CustomerDashboardController::class, 'dashboard']);
         Route::get('bookings', [CustomerBookingController::class, 'index']);
         Route::post('bookings', [CustomerBookingController::class, 'store'])->middleware('permission:create_bookings');
@@ -105,6 +114,19 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
         Route::get('notifications', [CustomerNotificationController::class, 'index']);
         Route::put('notifications/{id}/read', [CustomerNotificationController::class, 'markRead'])->whereNumber('id');
         Route::get('providers/search', [SearchController::class, 'providers'])->middleware('permission:view_provider_profiles');
+        Route::get('search/suggestions', [SearchController::class, 'getSearchSuggestions']);
+        Route::get('search/categories', [SearchController::class, 'getServiceCategories']);
+        Route::get('search/categories/{categoryId}/services', [SearchController::class, 'getServicesByCategory'])->whereNumber('categoryId');
+
+        Route::get('addresses', [CustomerAddressController::class, 'index'])->middleware('permission:manage_own_addresses');
+        Route::post('addresses', [CustomerAddressController::class, 'store'])->middleware('permission:manage_own_addresses');
+        Route::get('addresses/{id}', [CustomerAddressController::class, 'show'])->middleware('permission:manage_own_addresses')->whereNumber('id');
+        Route::put('addresses/{id}', [CustomerAddressController::class, 'update'])->middleware('permission:manage_own_addresses')->whereNumber('id');
+        Route::delete('addresses/{id}', [CustomerAddressController::class, 'destroy'])->middleware('permission:manage_own_addresses')->whereNumber('id');
+
+        Route::get('profile/location', [CustomerProfileController::class, 'getLocation']);
+        Route::post('profile/location', [CustomerProfileController::class, 'updateLocation']);
+        Route::put('profile', [CustomerProfileController::class, 'update']);
     });
 
     Route::middleware(['auth:sanctum', 'verified', 'role:provider', 'throttle:api'])->prefix('provider')->group(function () {
@@ -122,6 +144,7 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
         Route::post('projects', [ProviderProjectController::class, 'store'])->middleware('permission:manage_portfolio');
         Route::put('projects/{id}', [ProviderProjectController::class, 'update'])->middleware('permission:manage_portfolio')->whereNumber('id');
         Route::delete('projects/{id}', [ProviderProjectController::class, 'destroy'])->middleware('permission:manage_portfolio')->whereNumber('id');
+        Route::post('projects/{id}/images', [ProviderProjectController::class, 'uploadImages'])->middleware('permission:manage_portfolio')->whereNumber('id');
         Route::get('availability', [ProviderAvailabilityController::class, 'index']);
         Route::post('availability', [ProviderAvailabilityController::class, 'store'])->middleware('permission:manage_own_availability');
         Route::put('availability/{id}', [ProviderAvailabilityController::class, 'update'])->middleware('permission:manage_own_availability')->whereNumber('id');
@@ -133,6 +156,8 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
         Route::put('chats/{id}/messages/{messageId}/read', [ProviderChatController::class, 'markMessageRead'])->middleware('permission:send_messages')->whereNumber('id')->whereNumber('messageId');
         Route::get('earnings', [ProviderEarningsController::class, 'index'])->middleware('permission:view_own_earnings');
         Route::get('public-profile', [ProviderProfileController::class, 'publicProfile']);
+        Route::get('profile/location', [ProviderProfileController::class, 'getLocation']);
+        Route::put('profile/location', [ProviderProfileController::class, 'updateLocation']);
     });
 
     Route::middleware(['auth:sanctum', 'verified', 'role:super_admin,admin', 'throttle:api'])->prefix('admin')->group(function () {
@@ -146,6 +171,13 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
         Route::post('users/{id}/grant-permission', [AdminUserController::class, 'grantPermission'])->middleware('permission:manage_permissions')->whereNumber('id');
         Route::get('providers', [AdminProviderController::class, 'index'])->middleware('permission:view_providers');
         Route::get('providers/{id}', [AdminProviderController::class, 'show'])->middleware('permission:view_providers')->whereNumber('id');
+        Route::post('providers/{id}/verify', [AdminProviderController::class, 'verify'])->middleware('permission:verify_providers')->whereNumber('id');
+        Route::post('providers/{id}/approve', [AdminProviderController::class, 'approve'])->middleware('permission:verify_providers')->whereNumber('id');
+        Route::get('providers/{providerId}/projects', [AdminProviderProjectController::class, 'index'])->middleware('permission:manage_portfolio')->whereNumber('providerId');
+        Route::post('providers/{providerId}/projects', [AdminProviderProjectController::class, 'store'])->middleware('permission:manage_portfolio')->whereNumber('providerId');
+        Route::put('providers/{providerId}/projects/{projectId}', [AdminProviderProjectController::class, 'update'])->middleware('permission:manage_portfolio')->whereNumber('providerId')->whereNumber('projectId');
+        Route::delete('providers/{providerId}/projects/{projectId}', [AdminProviderProjectController::class, 'destroy'])->middleware('permission:manage_portfolio')->whereNumber('providerId')->whereNumber('projectId');
+        Route::post('providers/{providerId}/projects/{projectId}/images', [AdminProviderProjectController::class, 'uploadImages'])->middleware('permission:manage_portfolio')->whereNumber('providerId')->whereNumber('projectId');
         Route::get('services', [AdminServiceController::class, 'index']);
         Route::post('services', [AdminServiceController::class, 'store'])->middleware('permission:manage_services');
         Route::put('services/{id}', [AdminServiceController::class, 'update'])->middleware('permission:manage_services')->whereNumber('id');

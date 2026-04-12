@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\Auth;
 
+use App\Rules\LebanonProviderPhone;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rules\Password;
 
@@ -10,6 +11,27 @@ class RegisterRequest extends FormRequest
     public function authorize(): bool
     {
         return true;
+    }
+
+    /**
+     * Frontends often send the provider mobile as `phone`; we validate and normalize it as `provider_phone`.
+     */
+    protected function prepareForValidation(): void
+    {
+        if (! $this->isProviderRegistration()) {
+            return;
+        }
+
+        if (! $this->filled('provider_phone') && $this->filled('phone')) {
+            $this->merge(['provider_phone' => $this->input('phone')]);
+        }
+    }
+
+    protected function isProviderRegistration(): bool
+    {
+        $role = strtolower((string) $this->input('role'));
+
+        return $this->boolean('register_as_provider') || $role === 'provider';
     }
 
     /**
@@ -25,8 +47,8 @@ class RegisterRequest extends FormRequest
             'phone' => ['nullable', 'string', 'max:50'],
         ];
 
-        if ($this->boolean('register_as_provider') || $this->input('role') === 'provider') {
-            $rules['provider_phone'] = ['required', 'string', 'max:50'];
+        if ($this->isProviderRegistration()) {
+            $rules['provider_phone'] = ['required', 'string', new LebanonProviderPhone];
         }
 
         return $rules;

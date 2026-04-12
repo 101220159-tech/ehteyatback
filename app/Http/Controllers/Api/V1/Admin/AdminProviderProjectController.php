@@ -1,31 +1,30 @@
 <?php
 
-namespace App\Http\Controllers\Api\V1\Provider;
+namespace App\Http\Controllers\Api\V1\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\ProjectRequest;
 use App\Http\Resources\ProjectResource;
 use App\Models\Project;
 use App\Models\ProjectImage;
+use App\Models\Provider;
 use App\Traits\HandlesImageUpload;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
-class ProviderProjectController extends Controller
+class AdminProviderProjectController extends Controller
 {
     use HandlesImageUpload;
 
-    protected function provider(Request $request)
+    protected function provider(int $providerId): Provider
     {
-        $p = $request->user()->provider;
-        abort_if(! $p, 404, 'Provider profile not found.');
-
-        return $p;
+        return Provider::query()->findOrFail($providerId);
     }
 
-    public function index(Request $request): JsonResponse
+    public function index(Request $request, int $providerId): JsonResponse
     {
-        $provider = $this->provider($request);
+        $provider = $this->provider($providerId);
+
         $items = Project::query()
             ->where('provider_id', $provider->id)
             ->with('images')
@@ -35,9 +34,9 @@ class ProviderProjectController extends Controller
         return ProjectResource::collection($items)->response();
     }
 
-    public function store(ProjectRequest $request): JsonResponse
+    public function store(ProjectRequest $request, int $providerId): JsonResponse
     {
-        $provider = $this->provider($request);
+        $provider = $this->provider($providerId);
         $data = $request->validated();
 
         $project = Project::query()->create([
@@ -61,10 +60,13 @@ class ProviderProjectController extends Controller
         return (new ProjectResource($project->load('images')))->response()->setStatusCode(201);
     }
 
-    public function update(ProjectRequest $request, int $id): ProjectResource
+    public function update(ProjectRequest $request, int $providerId, int $projectId): ProjectResource
     {
-        $provider = $this->provider($request);
-        $project = Project::query()->where('provider_id', $provider->id)->findOrFail($id);
+        $provider = $this->provider($providerId);
+        $project = Project::query()
+            ->where('provider_id', $provider->id)
+            ->findOrFail($projectId);
+
         $data = $request->validated();
 
         $updates = [];
@@ -93,20 +95,23 @@ class ProviderProjectController extends Controller
         return new ProjectResource($project->fresh()->load('images'));
     }
 
-    public function destroy(Request $request, int $id): JsonResponse
+    public function destroy(int $providerId, int $projectId): JsonResponse
     {
-        $provider = $this->provider($request);
-        Project::query()->where('provider_id', $provider->id)->where('id', $id)->delete();
+        $provider = $this->provider($providerId);
+        Project::query()
+            ->where('provider_id', $provider->id)
+            ->where('id', $projectId)
+            ->delete();
 
         return response()->json(['message' => 'Project deleted.']);
     }
 
-    public function uploadImages(Request $request, int $id): JsonResponse
+    public function uploadImages(Request $request, int $providerId, int $projectId): JsonResponse
     {
-        $provider = $this->provider($request);
+        $provider = $this->provider($providerId);
         $project = Project::query()
             ->where('provider_id', $provider->id)
-            ->findOrFail($id);
+            ->findOrFail($projectId);
 
         $validated = $request->validate([
             'images' => ['required', 'array', 'min:1'],
@@ -127,3 +132,4 @@ class ProviderProjectController extends Controller
         ]);
     }
 }
+

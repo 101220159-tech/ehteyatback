@@ -20,7 +20,7 @@ use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\URL;
 use Laravel\Sanctum\HasApiTokens;
 
-#[Fillable(['name', 'email', 'password', 'phone', 'role_id', 'latitude', 'longitude', 'fcm_token', 'avatar_url'])]
+#[Fillable(['name', 'email', 'password', 'phone', 'role_id', 'latitude', 'longitude', 'address', 'fcm_token', 'avatar_url'])]
 #[Hidden(['password', 'remember_token'])]
 class User extends Authenticatable implements MustVerifyEmail
 {
@@ -92,5 +92,14 @@ class User extends Authenticatable implements MustVerifyEmail
     public function chats(): HasMany
     {
         return $this->hasMany(Chat::class, 'client_id');
+    }
+
+    public function getLocationAttribute(): ?string
+    {
+        if ($this->latitude !== null && $this->longitude !== null) {
+            return $this->latitude.', '.$this->longitude;
+        }
+
+        return $this->address;
     }
 }

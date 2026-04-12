@@ -16,6 +16,7 @@ use App\Models\Provider;
 use App\Models\Role;
 use App\Models\User;
 use App\Services\FirebaseService;
+use App\Support\LebanonMobilePhone;
 use App\Traits\HandlesImageUpload;
 use Illuminate\Auth\Events\Verified;
 use Illuminate\Http\JsonResponse;
@@ -37,7 +38,8 @@ class AuthController extends Controller
     public function register(RegisterRequest $request): JsonResponse
     {
         $data = $request->validated();
-        $asProvider = $request->boolean('register_as_provider') || ($data['role'] ?? '') === 'provider';
+        $asProvider = $request->boolean('register_as_provider')
+            || strtolower((string) ($data['role'] ?? '')) === 'provider';
 
         $roleName = $asProvider ? 'provider' : 'customer';
         $roleId = Role::query()->where('name', $roleName)->value('id')
@@ -48,7 +50,9 @@ class AuthController extends Controller
             'email' => $data['email'],
             'password' => $data['password'],
             'role_id' => $roleId,
-            'phone' => $asProvider ? ($data['provider_phone'] ?? null) : ($data['phone'] ?? null),
+            'phone' => $asProvider
+                ? LebanonMobilePhone::normalize($data['provider_phone'] ?? $data['phone'] ?? '')
+                : ($data['phone'] ?? null),
         ]);
 
         if ($asProvider) {
@@ -80,7 +84,8 @@ class AuthController extends Controller
             ]);
         }
 
-        if (! $user->hasVerifiedEmail()) {
+        // Only enforce email verification for providers and admins.
+        if (! $user->hasVerifiedEmail() && $user->hasRole(['provider', 'admin', 'super_admin'])) {
             return response()->json([
                 'message' => 'Email address is not verified.',
                 'errors' => ['email' => ['Please verify your email before logging in.']],

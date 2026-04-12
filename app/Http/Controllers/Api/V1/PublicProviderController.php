@@ -14,7 +14,7 @@ class PublicProviderController extends Controller
     public function index(Request $request): AnonymousResourceCollection
     {
         $query = Provider::query()
-            ->with(['user:id,name,email', 'services.category'])
+            ->with(['user:id,name,email,latitude,longitude', 'services.category'])
             ->withCount('reviews');
 
         if ($request->filled('category_id')) {
@@ -44,7 +44,7 @@ class PublicProviderController extends Controller
             'provider_public_'.$id,
             60,
             fn () => Provider::query()
-                ->with(['user:id,name,email', 'services.category', 'projects.images'])
+                ->with(['user:id,name,email,latitude,longitude', 'services.category', 'projects.images'])
                 ->withCount('reviews')
                 ->findOrFail($id)
         );
