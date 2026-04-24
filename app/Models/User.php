@@ -9,9 +9,7 @@ use App\Traits\HasRolesAndPermissions;
 use Database\Factories\UserFactory;
 use Illuminate\Auth\Passwords\CanResetPassword;
 use Illuminate\Contracts\Auth\MustVerifyEmail;
-use Illuminate\Database\Eloquent\Attributes\Fillable;
-use Illuminate\Database\Eloquent\Attributes\Hidden;
-use Illuminate\Database\Eloquent\Casts\Attribute;
+use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
@@ -20,25 +18,73 @@ use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\URL;
 use Laravel\Sanctum\HasApiTokens;
 
-#[Fillable(['name', 'email', 'password', 'phone', 'role_id', 'latitude', 'longitude', 'address', 'fcm_token', 'avatar_url'])]
-#[Hidden(['password', 'remember_token'])]
 class User extends Authenticatable implements MustVerifyEmail
 {
     /** @use HasFactory<UserFactory> */
-    use CanResetPassword, HasApiTokens, HasFactory, HasNotifications, HasRolesAndPermissions;
+    use CanResetPassword, HasApiTokens, HasFactory, HasNotifications, HasRolesAndPermissions, HasUuids;
 
-    /**
-     * Eager-load relations used by {@see \App\Http\Resources\UserResource} (role, nested permissions, provider, direct grants).
-     */
+    protected $fillable = [
+        'name',
+        'email',
+        'password',
+        'google_id',
+        'phone',
+        'role_id',
+        'latitude',
+        'longitude',
+        'address',
+        'fcm_token',
+        'avatar_url',
+        'email_verified_at',
+    ];
+
+    protected $hidden = ['password', 'remember_token'];
+
+    protected function casts(): array
+    {
+        return [
+            'email_verified_at' => 'datetime',
+            'password'          => 'hashed',
+        ];
+    }
+
+    // ── Relations ──────────────────────────────────────────────────────────
+
+    public function provider(): HasOne
+    {
+        return $this->hasOne(Provider::class);
+    }
+
+    public function bookings(): HasMany
+    {
+        return $this->hasMany(Booking::class, 'customer_id');
+    }
+
+    public function customerReviews(): HasMany
+    {
+        return $this->hasMany(Review::class, 'customer_id');
+    }
+
+    public function chats(): HasMany
+    {
+        return $this->hasMany(Chat::class, 'customer_id');
+    }
+
+    public function notifications(): HasMany
+    {
+        return $this->hasMany(Notification::class);
+    }
+
+    public function aiConversations(): HasMany
+    {
+        return $this->hasMany(AiConversation::class);
+    }
+
+    // ── Helpers ────────────────────────────────────────────────────────────
+
     public function loadForApiSerialization(): static
     {
         return $this->loadMissing(['role.permissions', 'provider', 'directPermissions']);
-    }
-
-    /** The associated role's name (`roles.name`); use for APIs such as `GET /auth/permissions`. */
-    protected function roleName(): Attribute
-    {
-        return Attribute::get(fn () => $this->role?->name);
     }
 
     public function signedEmailVerificationUrl(): string
@@ -47,7 +93,7 @@ class User extends Authenticatable implements MustVerifyEmail
             'api.v1.verification.verify',
             now()->addMinutes(60),
             [
-                'id' => $this->getKey(),
+                'id'   => $this->getKey(),
                 'hash' => sha1($this->getEmailForVerification()),
             ]
         );
@@ -60,46 +106,9 @@ class User extends Authenticatable implements MustVerifyEmail
 
     public function sendPasswordResetNotification(#[\SensitiveParameter] $token): void
     {
-        $email = urlencode($this->getEmailForPasswordReset());
+        $email    = urlencode($this->getEmailForPasswordReset());
         $resetUrl = rtrim(config('app.url'), '/').'/api/v1/auth/reset-password?token='.$token.'&email='.$email;
 
         Mail::to($this->getEmailForPasswordReset())->queue(new PasswordResetEmail($this, $resetUrl));
-    }
-
-    protected function casts(): array
-    {
-        return [
-            'email_verified_at' => 'datetime',
-            'password' => 'hashed',
-        ];
-    }
-
-    public function provider(): HasOne
-    {
-        return $this->hasOne(Provider::class);
-    }
-
-    public function bookings(): HasMany
-    {
-        return $this->hasMany(Booking::class, 'client_id');
-    }
-
-    public function customerReviews(): HasMany
-    {
-        return $this->hasMany(Review::class, 'client_id');
-    }
-
-    public function chats(): HasMany
-    {
-        return $this->hasMany(Chat::class, 'client_id');
-    }
-
-    public function getLocationAttribute(): ?string
-    {
-        if ($this->latitude !== null && $this->longitude !== null) {
-            return $this->latitude.', '.$this->longitude;
-        }
-
-        return $this->address;
     }
 }

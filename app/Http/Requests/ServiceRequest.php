@@ -11,15 +11,16 @@ class ServiceRequest extends FormRequest
         return true;
     }
 
-    /**
-     * @return array<string, mixed>
-     */
     public function rules(): array
     {
+        $isUpdate = $this->route('id') !== null;
+
         return [
-            'name' => ['required', 'string', 'max:255'],
-            'description' => ['nullable', 'string'],
-            'category_id' => ['required', 'exists:service_categories,id'],
+            'name'        => [$isUpdate ? 'sometimes' : 'required', 'string', 'max:255'],
+            'description' => ['sometimes', 'nullable', 'string'],
+            'category_id' => [$isUpdate ? 'sometimes' : 'required', 'exists:service_categories,id'],
+            'base_price'  => ['sometimes', 'nullable', 'numeric', 'min:0'],
+            'icon'        => ['sometimes', 'nullable', 'image', 'mimes:jpg,jpeg,png,svg,webp', 'max:2048'],
         ];
     }
 }

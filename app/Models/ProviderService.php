@@ -2,11 +2,14 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class ProviderService extends Model
 {
+    use HasUuids;
+
     protected $fillable = ['provider_id', 'service_id', 'price'];
 
     protected function casts(): array

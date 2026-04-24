@@ -42,30 +42,25 @@ class ProviderProjectController extends Controller
 
         $project = Project::query()->create([
             'provider_id' => $provider->id,
-            'title' => $data['title'],
+            'title'       => $data['title'],
             'description' => $data['description'] ?? null,
         ]);
 
-        $imageUrl = $data['image_url'] ?? null;
         if ($request->hasFile('image')) {
-            $path = $this->uploadImage($request->file('image'), 'projects', 1200, 800);
-            $imageUrl = $this->publicStorageUrl($path);
-        }
-        if ($imageUrl) {
             ProjectImage::query()->create([
                 'project_id' => $project->id,
-                'image_url' => $imageUrl,
+                'image_url'  => $this->fileToDataUri($request->file('image')),
             ]);
         }
 
         return (new ProjectResource($project->load('images')))->response()->setStatusCode(201);
     }
 
-    public function update(ProjectRequest $request, int $id): ProjectResource
+    public function update(ProjectRequest $request, string $id): ProjectResource
     {
         $provider = $this->provider($request);
-        $project = Project::query()->where('provider_id', $provider->id)->findOrFail($id);
-        $data = $request->validated();
+        $project  = Project::query()->where('provider_id', $provider->id)->findOrFail($id);
+        $data     = $request->validated();
 
         $updates = [];
         if (array_key_exists('title', $data)) {
@@ -78,22 +73,17 @@ class ProviderProjectController extends Controller
             $project->update($updates);
         }
 
-        $imageUrl = $data['image_url'] ?? null;
         if ($request->hasFile('image')) {
-            $path = $this->uploadImage($request->file('image'), 'projects', 1200, 800);
-            $imageUrl = $this->publicStorageUrl($path);
-        }
-        if ($imageUrl) {
             ProjectImage::query()->create([
                 'project_id' => $project->id,
-                'image_url' => $imageUrl,
+                'image_url'  => $this->fileToDataUri($request->file('image')),
             ]);
         }
 
         return new ProjectResource($project->fresh()->load('images'));
     }
 
-    public function destroy(Request $request, int $id): JsonResponse
+    public function destroy(Request $request, string $id): JsonResponse
     {
         $provider = $this->provider($request);
         Project::query()->where('provider_id', $provider->id)->where('id', $id)->delete();
@@ -101,23 +91,57 @@ class ProviderProjectController extends Controller
         return response()->json(['message' => 'Project deleted.']);
     }
 
-    public function uploadImages(Request $request, int $id): JsonResponse
+    public function replaceImage(Request $request, string $id, string $imageId): JsonResponse
     {
         $provider = $this->provider($request);
-        $project = Project::query()
-            ->where('provider_id', $provider->id)
-            ->findOrFail($id);
+        $project  = Project::query()->where('provider_id', $provider->id)->findOrFail($id);
+
+        $image = ProjectImage::query()->where('project_id', $project->id)->findOrFail($imageId);
+
+        // Accept the file under either 'image' or 'file' field name
+        $fileKey = $request->hasFile('image') ? 'image' : 'file';
+
+        $request->validate([
+            $fileKey => ['required', 'image', 'mimes:jpg,jpeg,png', 'max:5120'],
+        ]);
+
+        $image->update([
+            'image_url' => $this->fileToDataUri($request->file($fileKey)),
+        ]);
+
+        return response()->json([
+            'message' => 'Image replaced.',
+            'project' => new ProjectResource($project->fresh()->load('images')),
+        ]);
+    }
+
+    public function destroyImage(Request $request, string $id, string $imageId): JsonResponse
+    {
+        $provider = $this->provider($request);
+        $project  = Project::query()->where('provider_id', $provider->id)->findOrFail($id);
+
+        ProjectImage::query()->where('project_id', $project->id)->findOrFail($imageId)->delete();
+
+        return response()->json([
+            'message' => 'Image deleted.',
+            'project' => new ProjectResource($project->fresh()->load('images')),
+        ]);
+    }
+
+    public function uploadImages(Request $request, string $id): JsonResponse
+    {
+        $provider = $this->provider($request);
+        $project  = Project::query()->where('provider_id', $provider->id)->findOrFail($id);
 
         $validated = $request->validate([
-            'images' => ['required', 'array', 'min:1'],
-            'images.*' => ['required', 'image', 'max:5120', 'dimensions:max_width=8000,max_height=8000'],
+            'images'   => ['required', 'array', 'min:1'],
+            'images.*' => ['required', 'image', 'max:5120'],
         ]);
 
         foreach ($validated['images'] as $file) {
-            $path = $this->uploadImage($file, 'projects', 1200, 800);
             ProjectImage::query()->create([
                 'project_id' => $project->id,
-                'image_url' => $this->publicStorageUrl($path),
+                'image_url'  => $this->fileToDataUri($file),
             ]);
         }
 

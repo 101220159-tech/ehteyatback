@@ -15,7 +15,12 @@ class AdminNotificationController extends Controller
     public function index(Request $request): JsonResponse
     {
         $items = Notification::query()
-            ->orderByDesc('id')
+            ->with('user')
+            ->when($request->user_id,  fn ($q) => $q->where('user_id', $request->user_id))
+            ->when($request->type,     fn ($q) => $q->where('type', $request->type))
+            ->when($request->is_read === 'true',  fn ($q) => $q->whereNotNull('read_at'))
+            ->when($request->is_read === 'false', fn ($q) => $q->whereNull('read_at'))
+            ->orderByDesc('created_at')
             ->paginate($request->integer('per_page', 30));
 
         return NotificationResource::collection($items)->response();
@@ -25,7 +30,7 @@ class AdminNotificationController extends Controller
     {
         $data = $request->validate([
             'user_ids' => ['required', 'array', 'min:1'],
-            'user_ids.*' => ['integer', 'exists:users,id'],
+            'user_ids.*' => ['uuid', 'exists:users,id'],
             'type' => ['required', 'string', 'max:100'],
             'title' => ['required', 'string', 'max:255'],
             'content' => ['required', 'string'],

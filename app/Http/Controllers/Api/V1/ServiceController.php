@@ -21,7 +21,7 @@ class ServiceController extends Controller
         return CategoryResource::collection($categories);
     }
 
-    public function show(int $id): ServiceResource
+    public function show(string $id): ServiceResource
     {
         $service = Service::query()
             ->with('category')

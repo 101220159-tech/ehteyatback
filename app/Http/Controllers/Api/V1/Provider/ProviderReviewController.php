@@ -23,7 +23,7 @@ class ProviderReviewController extends Controller
         $provider = $this->provider($request);
         $reviews = Review::query()
             ->where('provider_id', $provider->id)
-            ->with('client')
+            ->with(['customer', 'booking.service'])
             ->orderByDesc('created_at')
             ->paginate($request->integer('per_page', 15));
 

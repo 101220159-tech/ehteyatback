@@ -13,10 +13,10 @@ class NotificationService
     {
         $notification = Notification::query()->create([
             'user_id' => $user->id,
-            'type' => $type,
-            'title' => $title,
-            'message' => $message,
-            'data' => $data,
+            'type'    => $type,
+            'title'   => $title,
+            'body'    => $message,
+            'data'    => $data,
         ]);
 
         SendNotificationJob::dispatch($notification->id, ['in_app']);

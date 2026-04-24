@@ -20,13 +20,13 @@ class CustomerNotificationController extends Controller
         return NotificationResource::collection($items)->response();
     }
 
-    public function markRead(Request $request, int $id): JsonResponse
+    public function markRead(Request $request, string $id): JsonResponse
     {
         $n = Notification::query()
             ->where('user_id', $request->user()->id)
             ->findOrFail($id);
 
-        $n->update(['is_read' => true, 'read_at' => now()]);
+        $n->update(['read_at' => now()]);
 
         return response()->json(['message' => 'Marked as read.', 'notification' => new NotificationResource($n)]);
     }

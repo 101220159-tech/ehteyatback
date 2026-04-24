@@ -4,11 +4,33 @@ namespace App\Http\Controllers\Api\V1\Customer;
 
 use App\Http\Controllers\Controller;
 use App\Http\Resources\UserResource;
+use App\Traits\HandlesImageUpload;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 class CustomerProfileController extends Controller
 {
+    use HandlesImageUpload;
+
+    public function storeAvatar(Request $request): JsonResponse
+    {
+        $request->validate([
+            'avatar' => ['required', 'image', 'mimes:jpg,jpeg,png', 'max:2048'],
+        ]);
+
+        $file    = $request->file('avatar');
+        $mime    = $file->getMimeType();
+        $dataUri = 'data:'.$mime.';base64,'.base64_encode(file_get_contents($file->getRealPath()));
+
+        $request->user()->update(['avatar_url' => $dataUri]);
+
+        return response()->json([
+            'success'    => true,
+            'message'    => 'Avatar updated.',
+            'avatar_url' => $dataUri,
+        ]);
+    }
+
     public function update(Request $request): UserResource
     {
         $user = $request->user();

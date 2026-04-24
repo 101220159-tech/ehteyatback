@@ -32,7 +32,7 @@ class AdminRoleController extends Controller
         return (new RoleResource($role->load('permissions')))->response()->setStatusCode(201);
     }
 
-    public function update(RoleRequest $request, int $id): RoleResource
+    public function update(RoleRequest $request, string $id): RoleResource
     {
         $role = Role::query()->findOrFail($id);
         $data = $request->validated();
@@ -46,7 +46,7 @@ class AdminRoleController extends Controller
         return new RoleResource($role->fresh()->load('permissions'));
     }
 
-    public function destroy(int $id): JsonResponse
+    public function destroy(string $id): JsonResponse
     {
         Role::query()->where('id', $id)->delete();
 

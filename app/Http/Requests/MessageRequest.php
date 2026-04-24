@@ -17,8 +17,8 @@ class MessageRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'message_text' => ['required', 'string', 'max:10000'],
-            'message_type' => ['nullable', 'string', 'max:100'],
+            'body' => ['required', 'string', 'max:10000'],
+            'type' => ['nullable', 'in:text,image'],
         ];
     }
 }

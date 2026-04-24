@@ -14,6 +14,12 @@ Schedule::command('bookings:check-status')->dailyAt('23:00');
 
 Schedule::command('providers:update-ratings')->hourly();
 
+// Auto-mark providers as busy/free every minute
+Schedule::command('providers:update-busy-status')->everyMinute();
+
+// Deactivate providers with expired subscriptions daily
+Schedule::command('subscriptions:deactivate-expired')->dailyAt('00:05');
+
 Schedule::command('clean:old-notifications')->daily();
 
 Schedule::command('reports:generate-daily')->dailyAt('00:30');

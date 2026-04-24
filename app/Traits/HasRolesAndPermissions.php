@@ -19,28 +19,17 @@ trait HasRolesAndPermissions
         return $this->belongsToMany(Permission::class, 'user_permissions');
     }
 
-    public function assignRole(Role|string|int $role, ?int $assignedBy = null): void
+    public function assignRole(Role|string $role): void
     {
         $this->update(['role_id' => $this->resolveRoleId($role)]);
-    }
-
-    public function syncRoles(array $roleIds, ?int $assignedBy = null): void
-    {
-        if ($roleIds === []) {
-            return;
-        }
-        $this->update(['role_id' => (int) reset($roleIds)]);
     }
 
     public function hasRole(string|array $roles): bool
     {
         $names = is_array($roles) ? $roles : [$roles];
-        $role = $this->relationLoaded('role') ? $this->role : $this->role()->first();
-        if (! $role) {
-            return false;
-        }
+        $role  = $this->relationLoaded('role') ? $this->role : $this->role()->first();
 
-        return in_array($role->name, $names, true);
+        return $role && in_array($role->name, $names, true);
     }
 
     public function hasPermission(string|array $permissions): bool
@@ -55,7 +44,6 @@ trait HasRolesAndPermissions
         return true;
     }
 
-    /** @param  list<string>  $names */
     public function hasAnyPermission(array $names): bool
     {
         foreach ($names as $name) {
@@ -67,11 +55,6 @@ trait HasRolesAndPermissions
         return false;
     }
 
-    public function hasRoleOrPermission(array $roles, array $permissions): bool
-    {
-        return $this->hasRole($roles) || $this->hasPermission($permissions);
-    }
-
     protected function hasSinglePermission(string $name): bool
     {
         if ($this->directPermissions()->where('permissions.name', $name)->exists()) {
@@ -79,41 +62,36 @@ trait HasRolesAndPermissions
         }
 
         $role = $this->relationLoaded('role') ? $this->role : $this->role()->first();
-        if (! $role) {
-            return false;
-        }
 
-        return $role->permissions()->where('permissions.name', $name)->exists();
+        return $role && $role->permissions()->where('permissions.name', $name)->exists();
     }
 
-    public function givePermissionTo(string|Permission $permission, ?int $grantedBy = null, $expiresAt = null): void
+    public function givePermissionTo(string|Permission $permission): void
     {
-        $id = $permission instanceof Permission ? $permission->id : Permission::query()->where('name', $permission)->value('id');
+        $id = $permission instanceof Permission
+            ? $permission->id
+            : Permission::query()->where('name', $permission)->value('id');
+
         if ($id) {
             $this->directPermissions()->syncWithoutDetaching([$id]);
         }
     }
 
-    public function denyPermissionTo(string|Permission $permission, ?int $grantedBy = null, $expiresAt = null): void
+    public function revokePermissionTo(string|Permission $permission): void
     {
-        $id = $permission instanceof Permission ? $permission->id : Permission::query()->where('name', $permission)->value('id');
+        $id = $permission instanceof Permission
+            ? $permission->id
+            : Permission::query()->where('name', $permission)->value('id');
+
         if ($id) {
             $this->directPermissions()->detach($id);
         }
     }
 
-    public function revokePermissionTo(string|Permission $permission): void
-    {
-        $this->denyPermissionTo($permission);
-    }
-
-    protected function resolveRoleId(Role|string|int $role): int
+    protected function resolveRoleId(Role|string $role): string
     {
         if ($role instanceof Role) {
             return $role->id;
-        }
-        if (is_int($role) || (is_string($role) && ctype_digit($role))) {
-            return (int) $role;
         }
 
         return Role::query()->where('name', $role)->firstOrFail()->id;

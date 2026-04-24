@@ -23,7 +23,7 @@ class RoleRequest extends FormRequest
             'name' => ['required', 'string', 'max:255', Rule::unique('roles', 'name')->ignore($roleId)],
             'description' => ['nullable', 'string'],
             'permission_ids' => ['nullable', 'array'],
-            'permission_ids.*' => ['integer', 'exists:permissions,id'],
+            'permission_ids.*' => ['uuid', 'exists:permissions,id'],
         ];
     }
 }

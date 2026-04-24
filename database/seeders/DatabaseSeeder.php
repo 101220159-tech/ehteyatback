@@ -12,7 +12,6 @@ class DatabaseSeeder extends Seeder
             RolePermissionSeeder::class,
             AdminUserSeeder::class,
             ServiceCategorySeeder::class,
-            SampleDataSeeder::class,
         ]);
     }
 }

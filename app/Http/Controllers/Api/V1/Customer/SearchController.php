@@ -81,21 +81,21 @@ class SearchController extends Controller
                             });
                     });
             })
-            ->with(['user:id,name,phone,email,latitude,longitude'])
+            ->with(['user:id,name,phone,email,avatar_url'])
             ->orderByDesc('rating_avg')
             ->limit(5)
             ->get();
 
         return response()->json([
             'categories' => CategoryResource::collection($categories)->resolve(),
-            'services' => ServiceResource::collection($services)->resolve(),
-            'providers' => $providers->map(fn (Provider $p) => [
-                'id' => $p->id,
-                'name' => $p->user?->name,
-                'bio' => $p->bio,
+            'services'   => ServiceResource::collection($services)->resolve(),
+            'providers'  => $providers->map(fn (Provider $p) => [
+                'id'         => $p->id,
+                'name'       => $p->user?->name,
+                'bio'        => $p->bio,
                 'rating_avg' => $p->rating_avg,
-                'latitude' => $p->user?->latitude,
-                'longitude' => $p->user?->longitude,
+                'latitude'   => $p->latitude,
+                'longitude'  => $p->longitude,
             ])->values(),
         ]);
     }
@@ -110,7 +110,7 @@ class SearchController extends Controller
         return CategoryResource::collection($categories)->response();
     }
 
-    public function getServicesByCategory(int $categoryId): JsonResponse
+    public function getServicesByCategory(string $categoryId): JsonResponse
     {
         $services = Service::query()
             ->where('category_id', $categoryId)

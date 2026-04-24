@@ -25,11 +25,9 @@ class ProviderProfileController extends Controller
         abort_if(! $provider, 404, 'Provider profile not found.');
 
         $userData = $request->validate([
-            'name' => ['sometimes', 'string', 'max:255'],
+            'name'  => ['sometimes', 'string', 'max:255'],
             'email' => ['sometimes', 'email', 'max:255'],
             'phone' => ['sometimes', 'nullable', 'string', new LebanonProviderPhone],
-            'latitude' => ['nullable', 'numeric'],
-            'longitude' => ['nullable', 'numeric'],
         ]);
 
         if (array_key_exists('phone', $userData)) {
@@ -37,8 +35,10 @@ class ProviderProfileController extends Controller
         }
 
         $providerData = $request->validate([
-            'bio' => ['nullable', 'string'],
+            'bio'              => ['nullable', 'string'],
             'experience_years' => ['sometimes', 'integer', 'min:0'],
+            'latitude'         => ['sometimes', 'numeric', 'between:-90,90'],
+            'longitude'        => ['sometimes', 'numeric', 'between:-180,180'],
         ]);
 
         if ($userData !== []) {
@@ -49,6 +49,30 @@ class ProviderProfileController extends Controller
         }
 
         return new ProviderResource($provider->fresh()->load(['user', 'services.category'])->loadCount('reviews'));
+    }
+
+    public function storeAvatar(Request $request): JsonResponse
+    {
+        $provider = $request->user()->provider;
+        abort_if(! $provider, 404, 'Provider profile not found.');
+
+        $request->validate([
+            'avatar' => ['required', 'image', 'mimes:jpg,jpeg,png', 'max:2048'],
+        ]);
+
+        $file    = $request->file('avatar');
+        $mime    = $file->getMimeType();
+        $dataUri = 'data:'.$mime.';base64,'.base64_encode(file_get_contents($file->getRealPath()));
+
+        // Save to both providers and users tables
+        $provider->update(['avatar_url' => $dataUri]);
+        $request->user()->update(['avatar_url' => $dataUri]);
+
+        return response()->json([
+            'success'    => true,
+            'message'    => 'Avatar updated.',
+            'avatar_url' => $dataUri,
+        ]);
     }
 
     public function publicProfile(Request $request): ProviderResource
@@ -62,39 +86,55 @@ class ProviderProfileController extends Controller
         abort_if(! $provider, 404, 'Provider profile not found.');
 
         $data = $request->validate([
-            'latitude' => ['required', 'numeric', 'between:-90,90'],
+            'latitude'  => ['required', 'numeric', 'between:-90,90'],
             'longitude' => ['required', 'numeric', 'between:-180,180'],
-            'address' => ['nullable', 'string', 'max:2048'],
+            'address'   => ['nullable', 'string', 'max:2048'],
         ]);
 
-        $request->user()->update([
-            'latitude' => $data['latitude'],
+        // Update provider table
+        $provider->update([
+            'latitude'  => $data['latitude'],
             'longitude' => $data['longitude'],
-            'address' => $data['address'] ?? $request->user()->address,
         ]);
+
+        // Sync coordinates + address to the user table.
+        // Use $request->input() to catch any capitalisation the frontend sends (address / Address).
+        $address = $data['address']
+            ?? $request->input('Address')
+            ?? $request->input('address');
+
+        $userUpdate = [
+            'latitude'  => $data['latitude'],
+            'longitude' => $data['longitude'],
+        ];
+        if ($address !== null) {
+            $userUpdate['address'] = $address;
+        }
+        $request->user()->update($userUpdate);
 
         return response()->json([
             'success' => true,
             'message' => 'Location updated',
-            'data' => [
-                'latitude' => $request->user()->latitude,
-                'longitude' => $request->user()->longitude,
-                'address' => $request->user()->address,
+            'data'    => [
+                'latitude'     => $provider->latitude,
+                'longitude'    => $provider->longitude,
+                'address'      => $request->user()->fresh()->address,
+                'has_location' => $provider->latitude !== null,
             ],
         ]);
     }
 
     public function getLocation(Request $request): JsonResponse
     {
-        $user = $request->user();
+        $provider = $request->user()->provider;
+        abort_if(! $provider, 404, 'Provider profile not found.');
 
         return response()->json([
             'success' => true,
             'data' => [
-                'latitude' => $user->latitude,
-                'longitude' => $user->longitude,
-                'address' => $user->address,
-                'has_location' => $user->latitude !== null && $user->longitude !== null,
+                'latitude'     => $provider->latitude,
+                'longitude'    => $provider->longitude,
+                'has_location' => $provider->latitude !== null,
             ],
         ]);
     }

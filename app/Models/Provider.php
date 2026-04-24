@@ -2,39 +2,73 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class Provider extends Model
 {
+    use HasUuids;
+
     protected $fillable = [
         'user_id',
         'bio',
         'experience_years',
         'rating_avg',
         'total_reviews',
-        // Verification workflow fields (may exist depending on which migrations were applied).
-        'status',
+        'is_active',
+        'is_busy',
         'is_verified',
         'verified_at',
+        'is_vip',
+        'subscription_expires_at',
+        'allow_chat',
+        'avatar_url',
+        'latitude',
+        'longitude',
     ];
 
     protected function casts(): array
     {
         return [
-            'experience_years' => 'integer',
-            'rating_avg' => 'decimal:2',
-            'total_reviews' => 'integer',
-            'is_verified' => 'boolean',
-            'verified_at' => 'datetime',
+            'experience_years'        => 'integer',
+            'rating_avg'              => 'decimal:2',
+            'total_reviews'           => 'integer',
+            'is_active'               => 'boolean',
+            'is_busy'                 => 'boolean',
+            'is_verified'             => 'boolean',
+            'is_vip'                  => 'boolean',
+            'allow_chat'              => 'boolean',
+            'verified_at'             => 'datetime',
+            'subscription_expires_at' => 'datetime',
+            'latitude'                => 'decimal:8',
+            'longitude'               => 'decimal:8',
         ];
     }
+
+    // ── Relations ──────────────────────────────────────────────────────────
 
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+
+    public function zones(): BelongsToMany
+    {
+        return $this->belongsToMany(Zone::class, 'provider_zones')->withTimestamps();
+    }
+
+    public function certifications(): HasMany
+    {
+        return $this->hasMany(ProviderCertification::class);
+    }
+
+    public function documents(): HasMany
+    {
+        return $this->hasMany(ProviderDocument::class);
     }
 
     public function providerServices(): HasMany
@@ -46,12 +80,6 @@ class Provider extends Model
     {
         return $this->belongsToMany(Service::class, 'provider_services')
             ->withPivot(['id', 'price'])
-            ->withTimestamps();
-    }
-
-    public function zones(): BelongsToMany
-    {
-        return $this->belongsToMany(Zone::class, 'provider_zones')
             ->withTimestamps();
     }
 
@@ -78,5 +106,18 @@ class Provider extends Model
     public function chats(): HasMany
     {
         return $this->hasMany(Chat::class);
+    }
+
+    public function payments(): HasMany
+    {
+        return $this->hasMany(Payment::class);
+    }
+
+    // ── Helpers ────────────────────────────────────────────────────────────
+
+    public function hasActiveSubscription(): bool
+    {
+        return $this->subscription_expires_at !== null
+            && $this->subscription_expires_at->isFuture();
     }
 }

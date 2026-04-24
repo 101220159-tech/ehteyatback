@@ -2,50 +2,58 @@
 
 namespace App\Http\Controllers\Api\V1\Customer;
 
-use App\Events\ChatMessageRead;
-use App\Events\ChatTyping;
+use App\Events\MessageRead;
+use App\Events\MessageSent;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\MessageRequest;
 use App\Http\Resources\ChatResource;
 use App\Http\Resources\MessageResource;
 use App\Models\Chat;
 use App\Models\Message;
+use App\Models\Notification;
 use App\Models\Provider;
-use App\Services\ChatNotificationService;
+use App\Services\NotificationService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
 
 class CustomerChatController extends Controller
 {
-    public function __construct(
-        protected ChatNotificationService $chatNotifications,
-    ) {}
+    public function __construct(private NotificationService $notify) {}
 
     public function store(Request $request): JsonResponse
     {
         $data = $request->validate([
-            'provider_id' => ['required', 'exists:providers,id'],
+            'provider_id' => ['required', 'uuid', 'exists:providers,id'],
         ]);
 
-        return $this->openWithProvider($request, (int) $data['provider_id']);
+        Provider::query()->findOrFail($data['provider_id']);
+
+        $chat = Chat::query()->firstOrCreate([
+            'customer_id' => $request->user()->id,
+            'provider_id' => $data['provider_id'],
+        ]);
+
+        return (new ChatResource($chat->load(['provider.user'])))->response();
     }
 
     public function index(Request $request): JsonResponse
     {
+        $userId = $request->user()->id;
+
         $items = Chat::query()
-            ->where('client_id', $request->user()->id)
+            ->where('customer_id', $userId)
             ->with(['provider.user'])
+            ->withCount(['messages as unread_count' => fn ($q) => $q->whereNull('read_at')->where('sender_id', '!=', $userId)])
             ->orderByDesc('updated_at')
             ->paginate($request->integer('per_page', 15));
 
         return ChatResource::collection($items)->response();
     }
 
-    public function messages(Request $request, int $id): JsonResponse
+    public function messages(Request $request, string $id): JsonResponse
     {
         $chat = Chat::query()
-            ->where('client_id', $request->user()->id)
+            ->where('customer_id', $request->user()->id)
             ->findOrFail($id);
 
         $messages = $chat->messages()->paginate($request->integer('per_page', 50));
@@ -53,75 +61,60 @@ class CustomerChatController extends Controller
         return MessageResource::collection($messages)->response();
     }
 
-    public function sendMessage(MessageRequest $request, int $id): JsonResponse
+    public function sendMessage(MessageRequest $request, string $id): JsonResponse
     {
         $chat = Chat::query()
-            ->where('client_id', $request->user()->id)
+            ->where('customer_id', $request->user()->id)
             ->findOrFail($id);
 
         $message = Message::query()->create([
-            'chat_id' => $chat->id,
+            'chat_id'   => $chat->id,
             'sender_id' => $request->user()->id,
-            'message_text' => $request->input('message_text'),
-            'message_type' => $request->input('message_type'),
+            'body'      => $request->input('body'),
+            'type'      => $request->input('type', 'text'),
         ]);
 
-        $chat->touch();
-        $this->chatNotifications->notifyNewMessage($message);
+        $chat->update(['last_message_at' => now()]);
+
+        // Broadcast to the chat channel
+        broadcast(new MessageSent($message))->toOthers();
+
+        // Notify provider if they have no unread messages in this chat yet
+        $chat->load('provider.user');
+        if ($chat->provider?->user) {
+            $unread = Message::where('chat_id', $chat->id)
+                ->whereNull('read_at')
+                ->where('sender_id', '!=', $chat->provider->user->id)
+                ->count();
+
+            if ($unread === 1) {
+                $this->notify->sendInApp(
+                    $chat->provider->user,
+                    'new_message',
+                    'New Message',
+                    $request->user()->name.' sent you a message.',
+                    ['chat_id' => $chat->id]
+                );
+            }
+        }
 
         return (new MessageResource($message))->response()->setStatusCode(201);
     }
 
-    public function typing(Request $request, int $id): JsonResponse
+    public function markMessageRead(Request $request, string $id, string $msgId): JsonResponse
     {
         $chat = Chat::query()
-            ->where('client_id', $request->user()->id)
-            ->findOrFail($id);
-
-        $typing = $request->boolean('typing');
-        broadcast(new ChatTyping(
-            (int) $chat->id,
-            (int) $request->user()->id,
-            (string) $request->user()->name,
-            $typing
-        ))->toOthers();
-
-        return response()->json(['ok' => true]);
-    }
-
-    public function markMessageRead(Request $request, int $id, int $messageId): JsonResponse
-    {
-        $chat = Chat::query()
-            ->where('client_id', $request->user()->id)
+            ->where('customer_id', $request->user()->id)
             ->findOrFail($id);
 
         $message = Message::query()
             ->where('chat_id', $chat->id)
-            ->findOrFail($messageId);
+            ->findOrFail($msgId);
 
-        DB::transaction(function () use ($message) {
-            $message->update(['is_read' => true, 'read_at' => now()]);
-        });
+        $message->update(['read_at' => now()]);
 
-        broadcast(new ChatMessageRead(
-            (int) $chat->id,
-            (int) $message->id,
-            (int) $request->user()->id
-        ))->toOthers();
+        broadcast(new MessageRead($chat->id, $message->id, $request->user()->id));
 
         return response()->json(['ok' => true]);
-    }
-
-    private function openWithProvider(Request $request, int $providerId): JsonResponse
-    {
-        Provider::query()->findOrFail($providerId);
-        $chat = Chat::query()->firstOrCreate(
-            [
-                'client_id' => $request->user()->id,
-                'provider_id' => $providerId,
-            ],
-        );
-
-        return (new ChatResource($chat->load(['provider.user'])))->response();
     }
 }

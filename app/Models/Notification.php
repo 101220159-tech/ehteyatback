@@ -2,20 +2,20 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class Notification extends Model
 {
-    protected $fillable = [
-        'user_id', 'title', 'message', 'type', 'is_read', 'read_at', 'data',
-    ];
+    use HasUuids;
+
+    protected $fillable = ['user_id', 'title', 'body', 'type', 'data', 'read_at'];
 
     protected function casts(): array
     {
         return [
-            'data' => 'array',
-            'is_read' => 'boolean',
+            'data'    => 'array',
             'read_at' => 'datetime',
         ];
     }

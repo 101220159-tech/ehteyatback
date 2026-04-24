@@ -17,9 +17,9 @@ class ReviewRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'provider_id' => ['required', 'exists:providers,id'],
-            'rating' => ['required', 'integer', 'min:1', 'max:5'],
-            'comment' => ['nullable', 'string', 'max:5000'],
+            'booking_id'  => ['required', 'uuid', 'exists:bookings,id'],
+            'rating'      => ['required', 'integer', 'min:1', 'max:5'],
+            'comment'     => ['nullable', 'string', 'max:5000'],
         ];
     }
 }

@@ -14,24 +14,30 @@ class CustomerReviewController extends Controller
 {
     public function store(ReviewRequest $request): JsonResponse
     {
+        $booking = \App\Models\Booking::where('id', $request->input('booking_id'))
+            ->where('customer_id', $request->user()->id)
+            ->where('status', 'completed')
+            ->firstOrFail();
+
         $review = Review::query()->create([
-            'client_id' => $request->user()->id,
-            'provider_id' => $request->integer('provider_id'),
-            'rating' => $request->integer('rating'),
-            'comment' => $request->input('comment'),
+            'booking_id'  => $booking->id,
+            'customer_id' => $request->user()->id,
+            'provider_id' => $booking->provider_id,
+            'rating'      => $request->integer('rating'),
+            'comment'     => $request->input('comment'),
         ]);
 
         UpdateProviderRatingJob::dispatch($review->provider_id);
 
-        return (new ReviewResource($review->load(['client', 'provider.user'])))
+        return (new ReviewResource($review->load(['customer', 'provider.user'])))
             ->response()
             ->setStatusCode(201);
     }
 
-    public function update(Request $request, int $id): ReviewResource
+    public function update(Request $request, string $id): ReviewResource
     {
         $review = Review::query()
-            ->where('client_id', $request->user()->id)
+            ->where('customer_id', $request->user()->id)
             ->findOrFail($id);
 
         $data = $request->validate([
@@ -43,6 +49,6 @@ class CustomerReviewController extends Controller
 
         UpdateProviderRatingJob::dispatch($review->provider_id);
 
-        return new ReviewResource($review->fresh()->load(['client', 'provider.user']));
+        return new ReviewResource($review->fresh()->load(['customer', 'provider.user']));
     }
 }

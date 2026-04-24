@@ -2,21 +2,19 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class Message extends Model
 {
-    protected $fillable = [
-        'chat_id', 'sender_id', 'message_text', 'message_type', 'is_read', 'read_at',
-    ];
+    use HasUuids;
+
+    protected $fillable = ['chat_id', 'sender_id', 'body', 'type', 'read_at'];
 
     protected function casts(): array
     {
-        return [
-            'is_read' => 'boolean',
-            'read_at' => 'datetime',
-        ];
+        return ['read_at' => 'datetime'];
     }
 
     public function chat(): BelongsTo

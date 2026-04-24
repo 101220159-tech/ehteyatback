@@ -12,7 +12,7 @@ use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 
-class SendNotificationJob implements ShouldQueue
+class SendNotificationJob
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
@@ -20,7 +20,7 @@ class SendNotificationJob implements ShouldQueue
      * @param  list<string>  $channels
      */
     public function __construct(
-        public int $notificationId,
+        public string $notificationId,
         public array $channels = ['in_app']
     ) {}
 
@@ -34,8 +34,8 @@ class SendNotificationJob implements ShouldQueue
         if (in_array('email', $this->channels, true)) {
             $user = User::query()->find($notification->user_id);
             if ($user) {
-                Mail::raw($notification->message ?? '', function ($message) use ($user, $notification) {
-                    $message->to($user->email)->subject($notification->title);
+                Mail::raw($notification->body ?? '', function ($message) use ($user, $notification) {
+                    $message->to($user->email)->subject($notification->title ?? '');
                 });
             }
         }

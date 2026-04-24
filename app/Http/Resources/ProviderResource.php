@@ -13,24 +13,35 @@ class ProviderResource extends JsonResource
     public function toArray(Request $request): array
     {
         return [
-            'id' => $this->id,
-            'user_id' => $this->user_id,
-            'bio' => $this->bio,
-            'experience_years' => $this->experience_years,
-            'rating_avg' => $this->rating_avg,
-            'total_reviews' => $this->whenCounted('reviews'),
-            'status' => $this->status,
-            'is_verified' => $this->is_verified,
-            'verified_at' => $this->verified_at,
-            'distance_km' => $this->when(isset($this->distance_km), $this->distance_km),
-            // Used by the map UI to place markers.
-            // Note: lat/lng live on the related `users` table.
-            'latitude' => $this->when($this->relationLoaded('user'), $this->user?->latitude),
-            'longitude' => $this->when($this->relationLoaded('user'), $this->user?->longitude),
-            'user' => new UserResource($this->whenLoaded('user')),
-            'services' => ServiceResource::collection($this->whenLoaded('services')),
-            'projects' => ProjectResource::collection($this->whenLoaded('projects')),
-            'created_at' => $this->created_at,
+            'id'                      => $this->id,
+            'user_id'                 => $this->user_id,
+            'bio'                     => $this->bio,
+            'experience_years'        => $this->experience_years,
+            'rating_avg'              => $this->rating_avg,
+            'total_reviews'           => $this->total_reviews,
+            'reviews_count'           => $this->whenCounted('reviews'),
+            'is_active'               => $this->is_active,
+            'is_busy'                 => $this->is_busy,
+            'is_verified'             => $this->is_verified,
+            'is_vip'                  => $this->is_vip,
+            'allow_chat'              => $this->allow_chat,
+            'subscription_expires_at' => $this->subscription_expires_at,
+            'subscription_active'     => $this->hasActiveSubscription(),
+            'verified_at'             => $this->verified_at,
+            'avatar_url'        => $this->avatar_url,
+            'latitude'          => $this->latitude,
+            'longitude'         => $this->longitude,
+            // Relations — always included when loaded, absent otherwise
+            'user'              => new UserResource($this->whenLoaded('user')),
+            'zones'             => $this->whenLoaded('zones'),
+            'zones_count'       => $this->whenCounted('zones'),
+            'services'          => ServiceResource::collection($this->whenLoaded('services')),
+            'certifications'    => $this->whenLoaded('certifications'),
+            'documents'         => $this->whenLoaded('documents'),
+            'availability'      => $this->whenLoaded('availabilitySlots'),
+            'projects'          => ProjectResource::collection($this->whenLoaded('projects')),
+            'payments'          => $this->whenLoaded('payments'),
+            'created_at'        => $this->created_at,
         ];
     }
 }

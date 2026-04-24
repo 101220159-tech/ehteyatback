@@ -51,7 +51,7 @@ class ProviderServiceController extends Controller
         return (new ProviderServiceResource($row->load(['service.category'])))->response()->setStatusCode(201);
     }
 
-    public function update(Request $request, int $id): ProviderServiceResource
+    public function update(Request $request, string $id): ProviderServiceResource
     {
         $provider = $this->provider($request);
         $row = ProviderService::query()->where('provider_id', $provider->id)->findOrFail($id);
@@ -63,7 +63,7 @@ class ProviderServiceController extends Controller
         return new ProviderServiceResource($row->fresh()->load(['service.category']));
     }
 
-    public function destroy(Request $request, int $id): JsonResponse
+    public function destroy(Request $request, string $id): JsonResponse
     {
         $provider = $this->provider($request);
         ProviderService::query()->where('provider_id', $provider->id)->where('id', $id)->delete();

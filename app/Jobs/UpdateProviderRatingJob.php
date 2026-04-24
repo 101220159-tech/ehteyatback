@@ -10,11 +10,11 @@ use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 
-class UpdateProviderRatingJob implements ShouldQueue
+class UpdateProviderRatingJob
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
-    public function __construct(public int $providerId) {}
+    public function __construct(public string $providerId) {}
 
     public function handle(RatingService $ratings): void
     {

@@ -17,10 +17,10 @@ class CustomerDashboardController extends Controller
         return response()->json([
             'upcoming_bookings' => BookingResource::collection(
                 Booking::query()
-                    ->where('client_id', $user->id)
-                    ->whereIn('status', ['pending', 'confirmed'])
-                    ->where('booking_date', '>=', now())
-                    ->orderBy('booking_date')
+                    ->where('customer_id', $user->id)
+                    ->whereIn('status', ['pending', 'accepted'])
+                    ->where('scheduled_at', '>=', now())
+                    ->orderBy('scheduled_at')
                     ->limit(5)
                     ->with(['provider.user', 'service'])
                     ->get()
@@ -31,9 +31,9 @@ class CustomerDashboardController extends Controller
     public function history(Request $request): JsonResponse
     {
         $bookings = Booking::query()
-            ->where('client_id', $request->user()->id)
-            ->whereIn('status', ['completed', 'cancelled', 'no_show'])
-            ->orderByDesc('booking_date')
+            ->where('customer_id', $request->user()->id)
+            ->whereIn('status', ['completed', 'cancelled'])
+            ->orderByDesc('scheduled_at')
             ->with(['provider.user', 'service'])
             ->paginate($request->integer('per_page', 15));
 

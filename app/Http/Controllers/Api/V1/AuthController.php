@@ -6,17 +6,16 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Auth\ChangePasswordRequest;
 use App\Http\Requests\Auth\ForgotPasswordRequest;
 use App\Http\Requests\Auth\LoginRequest;
-use App\Http\Requests\FcmTokenRequest;
 use App\Http\Requests\Auth\ProfileUpdateRequest;
 use App\Http\Requests\Auth\RegisterRequest;
 use App\Http\Requests\Auth\ResetPasswordRequest;
+use App\Http\Requests\FcmTokenRequest;
 use App\Http\Resources\UserResource;
 use App\Mail\WelcomeEmail;
 use App\Models\Provider;
 use App\Models\Role;
 use App\Models\User;
 use App\Services\FirebaseService;
-use App\Support\LebanonMobilePhone;
 use App\Traits\HandlesImageUpload;
 use Illuminate\Auth\Events\Verified;
 use Illuminate\Http\JsonResponse;
@@ -24,83 +23,185 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Password;
+use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
+use Laravel\Socialite\Facades\Socialite;
 
 /**
- * Registration, login, profile, password flows, and device FCM token.
- *
  * @group Authentication
+ *
+ * Registration, login, Google OAuth, profile, and password flows.
  */
 class AuthController extends Controller
 {
     use HandlesImageUpload;
 
+    // ── Standard registration ──────────────────────────────────────────────
+
+    /**
+     * Register a new user (customer or provider).
+     *
+     * @bodyParam name string required Full name.
+     * @bodyParam email string required Email address.
+     * @bodyParam password string required Min 8 chars, confirmed.
+     * @bodyParam password_confirmation string required Must match password.
+     * @bodyParam role string optional customer|provider (default: customer).
+     * @bodyParam phone string optional Phone number.
+     */
     public function register(RegisterRequest $request): JsonResponse
     {
-        $data = $request->validated();
+        $data       = $request->validated();
         $asProvider = $request->boolean('register_as_provider')
             || strtolower((string) ($data['role'] ?? '')) === 'provider';
 
         $roleName = $asProvider ? 'provider' : 'customer';
-        $roleId = Role::query()->where('name', $roleName)->value('id')
+        $roleId   = Role::query()->where('name', $roleName)->value('id')
             ?? throw ValidationException::withMessages(['role' => ['Role not configured. Run seeders.']]);
 
         $user = User::query()->create([
-            'name' => $data['name'],
-            'email' => $data['email'],
+            'name'     => $data['name'],
+            'email'    => $data['email'],
             'password' => $data['password'],
-            'role_id' => $roleId,
-            'phone' => $asProvider
-                ? LebanonMobilePhone::normalize($data['provider_phone'] ?? $data['phone'] ?? '')
-                : ($data['phone'] ?? null),
+            'role_id'  => $roleId,
+            'phone'    => $data['phone'] ?? null,
         ]);
 
         if ($asProvider) {
-            Provider::query()->create([
-                'user_id' => $user->id,
-            ]);
+            Provider::query()->create(['user_id' => $user->id]);
         }
 
         Mail::to($user->email)->queue(new WelcomeEmail($user));
 
-        $device = $request->input('device_name', 'api');
-        $token = $user->createToken($device)->plainTextToken;
+        $token = $user->createToken($request->input('device_name', 'api'))->plainTextToken;
 
         return response()->json([
             'message' => 'Registered successfully. Please verify your email.',
-            'token' => $token,
-            'user' => new UserResource($user->loadForApiSerialization()),
+            'token'   => $token,
+            'user'    => new UserResource($user->loadForApiSerialization()),
         ], 201);
     }
 
+    // ── Standard login ─────────────────────────────────────────────────────
+
+    /**
+     * Login with email and password.
+     *
+     * @bodyParam email string required
+     * @bodyParam password string required
+     * @bodyParam device_name string optional Token name. Default: "api"
+     */
     public function login(LoginRequest $request): JsonResponse
     {
-        $credentials = $request->only('email', 'password');
-        $user = User::query()->where('email', $credentials['email'])->first();
+        $user = User::query()->where('email', $request->email)->first();
 
-        if (! $user || ! Hash::check($credentials['password'], $user->password)) {
+        if (! $user || ! Hash::check($request->password, $user->password)) {
             throw ValidationException::withMessages([
                 'email' => [__('auth.failed')],
             ]);
         }
 
-        // Only enforce email verification for providers and admins.
         if (! $user->hasVerifiedEmail() && $user->hasRole(['provider', 'admin', 'super_admin'])) {
             return response()->json([
                 'message' => 'Email address is not verified.',
-                'errors' => ['email' => ['Please verify your email before logging in.']],
+                'errors'  => ['email' => ['Please verify your email before logging in.']],
             ], 403);
         }
 
-        $device = $request->input('device_name', 'api');
-        $token = $user->createToken($device)->plainTextToken;
+        $token = $user->createToken($request->input('device_name', 'api'))->plainTextToken;
 
         return response()->json([
             'token' => $token,
-            'user' => new UserResource($user->loadForApiSerialization()),
+            'user'  => new UserResource($user->loadForApiSerialization()),
         ]);
     }
 
+    // ── Google OAuth ───────────────────────────────────────────────────────
+
+    /**
+     * Redirect to Google OAuth (for browser-based flows).
+     */
+    public function googleRedirect(): \Symfony\Component\HttpFoundation\RedirectResponse
+    {
+        return Socialite::driver('google')->stateless()->redirect();
+    }
+
+    /**
+     * Handle Google OAuth callback.
+     *
+     * Returns a Sanctum token on success. The frontend should exchange
+     * the `code` from the Google popup for a token here.
+     *
+     * @bodyParam token string required The ID token from Google Sign-In (for mobile/SPA flows).
+     */
+    public function googleCallback(Request $request): JsonResponse
+    {
+        try {
+            $googleUser = Socialite::driver('google')->stateless()->user();
+        } catch (\Throwable) {
+            return response()->json(['message' => 'Invalid Google token.'], 422);
+        }
+
+        $customerRoleId = Role::query()->where('name', 'customer')->value('id');
+
+        $user = User::query()->firstOrCreate(
+            ['google_id' => $googleUser->getId()],
+            [
+                'name'              => $googleUser->getName(),
+                'email'             => $googleUser->getEmail(),
+                'google_id'         => $googleUser->getId(),
+                'avatar_url'        => $googleUser->getAvatar(),
+                'email_verified_at' => now(),
+                'password'          => null,
+                'role_id'           => $customerRoleId,
+            ]
+        );
+
+        // If user registered by email before, link the Google ID
+        if (! $user->google_id) {
+            $user->update([
+                'google_id'  => $googleUser->getId(),
+                'avatar_url' => $googleUser->getAvatar() ?? $user->avatar_url,
+            ]);
+        }
+
+        $token = $user->createToken('google-oauth')->plainTextToken;
+
+        return response()->json([
+            'token' => $token,
+            'user'  => new UserResource($user->loadForApiSerialization()),
+        ]);
+    }
+
+    // ── Profile ────────────────────────────────────────────────────────────
+
+    /**
+     * Get the authenticated user.
+     */
+    public function me(Request $request): UserResource
+    {
+        return new UserResource($request->user()->loadForApiSerialization());
+    }
+
+    /**
+     * Update own profile (name, phone, avatar, address, location).
+     */
+    public function updateProfile(ProfileUpdateRequest $request): UserResource
+    {
+        $user = $request->user();
+        $data = $request->safe()->except(['avatar']);
+
+        if ($request->hasFile('avatar')) {
+            $data['avatar_url'] = $this->fileToDataUri($request->file('avatar'));
+        }
+
+        $user->update($data);
+
+        return new UserResource($user->fresh()->loadForApiSerialization());
+    }
+
+    /**
+     * Logout (revoke current token).
+     */
     public function logout(Request $request): JsonResponse
     {
         $request->user()->currentAccessToken()?->delete();
@@ -108,79 +209,40 @@ class AuthController extends Controller
         return response()->json(['message' => 'Logged out.']);
     }
 
-    public function me(Request $request): UserResource
-    {
-        return new UserResource($request->user()->loadForApiSerialization());
-    }
-
     /**
-     * Lightweight payload for SPAs: current user's role name and effective permission names only.
-     *
-     * @group Authentication
+     * Return the authenticated user's role and permissions (for SPA routing).
      */
     public function permissions(Request $request): JsonResponse
     {
         $user = $request->user()->loadForApiSerialization();
 
         return response()->json([
-            'role_name' => $user->role_name,
+            'role_name'   => $user->role?->name,
             'permissions' => $user->effectivePermissionNames(),
         ]);
     }
+
+    // ── Password ───────────────────────────────────────────────────────────
 
     /**
-     * Debug / partner testing: mirrors dashboard checks your React app can use.
+     * Change password (authenticated).
      *
-     * @group Authentication
+     * @bodyParam current_password string required
+     * @bodyParam password string required New password, confirmed.
+     * @bodyParam password_confirmation string required
      */
-    public function permissionsTest(Request $request): JsonResponse
-    {
-        $user = $request->user()->loadForApiSerialization();
-
-        return response()->json([
-            'message' => 'Use this to test your frontend permissions logic.',
-            'role_name' => $user->role_name,
-            'permissions' => $user->effectivePermissionNames(),
-            'example_checks' => [
-                'is_customer' => $user->hasRole('customer'),
-                'is_provider' => $user->hasRole('provider'),
-                'is_admin' => $user->hasRole(['super_admin', 'admin']),
-                'can_create_booking' => $user->hasPermission('create_bookings'),
-                'can_manage_services' => $user->hasPermission('manage_services'),
-                'can_manage_users' => $user->hasPermission('manage_users'),
-            ],
-        ]);
-    }
-
-    public function updateProfile(ProfileUpdateRequest $request): UserResource
-    {
-        $user = $request->user();
-        $data = $request->safe()->except(['avatar']);
-        if ($request->hasFile('avatar')) {
-            $path = $this->uploadAvatar($request->file('avatar'));
-            $data['avatar_url'] = $this->publicStorageUrl($path);
-        }
-        $user->update($data);
-
-        return new UserResource($user->fresh()->loadForApiSerialization());
-    }
-
-    public function saveFcmToken(FcmTokenRequest $request, FirebaseService $firebase): JsonResponse
-    {
-        $firebase->saveToken($request->user(), $request->input('fcm_token'));
-
-        return response()->json(['message' => 'FCM token saved.']);
-    }
-
     public function changePassword(ChangePasswordRequest $request): JsonResponse
     {
-        $request->user()->update([
-            'password' => $request->validated()['password'],
-        ]);
+        $request->user()->update(['password' => $request->validated()['password']]);
 
         return response()->json(['message' => 'Password updated.']);
     }
 
+    /**
+     * Send password reset link.
+     *
+     * @bodyParam email string required
+     */
     public function forgotPassword(ForgotPasswordRequest $request): JsonResponse
     {
         $status = Password::broker()->sendResetLink($request->validated());
@@ -192,12 +254,17 @@ class AuthController extends Controller
         return response()->json(['message' => __($status)]);
     }
 
+    /**
+     * Reset password using the token from the email link.
+     *
+     * @bodyParam token string required
+     * @bodyParam email string required
+     * @bodyParam password string required New password, confirmed.
+     */
     public function resetPassword(ResetPasswordRequest $request): JsonResponse
     {
-        $payload = $request->validated();
-
         $status = Password::broker()->reset(
-            $payload,
+            $request->validated(),
             function (User $user, string $password) {
                 $user->forceFill(['password' => $password])->save();
             }
@@ -210,12 +277,17 @@ class AuthController extends Controller
         return response()->json(['message' => __($status)]);
     }
 
-    public function verifyEmail(Request $request, int $id, string $hash): JsonResponse
+    // ── Email verification ─────────────────────────────────────────────────
+
+    /**
+     * Verify email via signed link.
+     */
+    public function verifyEmail(Request $request, string $id, string $hash): JsonResponse
     {
         $user = User::query()->findOrFail($id);
 
         if (! hash_equals((string) $hash, sha1($user->getEmailForVerification()))) {
-            return response()->json(['message' => 'Invalid verification link.', 'errors' => []], 403);
+            return response()->json(['message' => 'Invalid verification link.'], 403);
         }
 
         if ($user->hasVerifiedEmail()) {
@@ -227,5 +299,19 @@ class AuthController extends Controller
         }
 
         return response()->json(['message' => 'Email verified successfully.']);
+    }
+
+    // ── FCM token ──────────────────────────────────────────────────────────
+
+    /**
+     * Save FCM device token for push notifications.
+     *
+     * @bodyParam fcm_token string required
+     */
+    public function saveFcmToken(FcmTokenRequest $request, FirebaseService $firebase): JsonResponse
+    {
+        $firebase->saveToken($request->user(), $request->input('fcm_token'));
+
+        return response()->json(['message' => 'FCM token saved.']);
     }
 }

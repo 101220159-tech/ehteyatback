@@ -42,7 +42,7 @@ class ProviderAvailabilityController extends Controller
         return (new AvailabilityResource($row))->response()->setStatusCode(201);
     }
 
-    public function update(AvailabilityRequest $request, int $id): AvailabilityResource
+    public function update(AvailabilityRequest $request, string $id): AvailabilityResource
     {
         $provider = $this->provider($request);
         $row = ProviderAvailability::query()->where('provider_id', $provider->id)->findOrFail($id);

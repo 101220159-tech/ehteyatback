@@ -5,7 +5,6 @@ namespace App\Http\Controllers\Api\V1;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\ProviderResource;
 use App\Models\Provider;
-use App\Services\CacheService;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 
@@ -38,16 +37,12 @@ class PublicProviderController extends Controller
         return ProviderResource::collection($query->paginate($request->integer('per_page', 15)));
     }
 
-    public function show(int $id, CacheService $cache): ProviderResource
+    public function show(string $id): ProviderResource
     {
-        $provider = $cache->remember(
-            'provider_public_'.$id,
-            60,
-            fn () => Provider::query()
-                ->with(['user:id,name,email,latitude,longitude', 'services.category', 'projects.images'])
-                ->withCount('reviews')
-                ->findOrFail($id)
-        );
+        $provider = Provider::query()
+            ->with(['user:id,name,email,latitude,longitude', 'services.category', 'projects.images', 'zones:id,name'])
+            ->withCount('reviews')
+            ->findOrFail($id);
 
         return new ProviderResource($provider);
     }

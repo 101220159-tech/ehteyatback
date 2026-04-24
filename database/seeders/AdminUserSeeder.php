@@ -11,20 +11,19 @@ class AdminUserSeeder extends Seeder
     public function run(): void
     {
         $roleId = Role::query()->where('name', 'super_admin')->value('id');
+
         if (! $roleId) {
             return;
         }
 
-        $user = User::query()->firstOrCreate(
+        User::query()->firstOrCreate(
             ['email' => 'admin@sp-platform.test'],
             [
-                'name' => 'Super Admin',
-                'password' => 'password',
+                'name'              => 'Super Admin',
+                'password'          => 'Admin@1234',
                 'email_verified_at' => now(),
-                'role_id' => $roleId,
+                'role_id'           => $roleId,
             ]
         );
-
-        $user->assignRole('super_admin');
     }
 }
