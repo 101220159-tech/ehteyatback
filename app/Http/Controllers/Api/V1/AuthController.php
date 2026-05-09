@@ -18,9 +18,11 @@ use App\Models\Provider;
 use App\Models\Role;
 use App\Models\User;
 use App\Services\FirebaseService;
+use App\Support\Frontend;
 use App\Traits\HandlesImageUpload;
 use Illuminate\Auth\Events\Verified;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Password;
@@ -284,23 +286,28 @@ class AuthController extends Controller
     /**
      * Verify email via signed link.
      */
-    public function verifyEmail(Request $request, string $id, string $hash): JsonResponse
+    public function verifyEmail(Request $request, string $id, string $hash): RedirectResponse
     {
-        $user = User::query()->findOrFail($id);
+        $user = User::query()->with('role')->findOrFail($id);
+
+        $roleName = $user->role?->name ?? 'customer';
+        $dashboard = match (true) {
+            in_array($roleName, ['admin', 'super_admin']) => Frontend::url('admin/dashboard'),
+            $roleName === 'provider'                      => Frontend::url('provider/dashboard'),
+            default                                       => Frontend::url('customer/dashboard'),
+        };
 
         if (! hash_equals((string) $hash, sha1($user->getEmailForVerification()))) {
-            return response()->json(['message' => 'Invalid verification link.'], 403);
+            return redirect($dashboard . '?verified=error');
         }
 
-        if ($user->hasVerifiedEmail()) {
-            return response()->json(['message' => 'Already verified.']);
+        if (! $user->hasVerifiedEmail()) {
+            if ($user->markEmailAsVerified()) {
+                event(new Verified($user));
+            }
         }
 
-        if ($user->markEmailAsVerified()) {
-            event(new Verified($user));
-        }
-
-        return response()->json(['message' => 'Email verified successfully.']);
+        return redirect($dashboard . '?verified=1');
     }
 
     // ── FCM token ──────────────────────────────────────────────────────────
