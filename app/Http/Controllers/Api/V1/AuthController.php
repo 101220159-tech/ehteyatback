@@ -11,6 +11,8 @@ use App\Http\Requests\Auth\RegisterRequest;
 use App\Http\Requests\Auth\ResetPasswordRequest;
 use App\Http\Requests\FcmTokenRequest;
 use App\Http\Resources\UserResource;
+use App\Jobs\SendEmailJob;
+use App\Mail\AccountPendingMail;
 use App\Mail\WelcomeEmail;
 use App\Models\Provider;
 use App\Models\Role;
@@ -21,7 +23,6 @@ use Illuminate\Auth\Events\Verified;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Password;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
@@ -68,9 +69,10 @@ class AuthController extends Controller
 
         if ($asProvider) {
             Provider::query()->create(['user_id' => $user->id]);
+            SendEmailJob::dispatchSync($user->email, new AccountPendingMail($user));
+        } else {
+            SendEmailJob::dispatchSync($user->email, new WelcomeEmail($user));
         }
-
-        Mail::to($user->email)->queue(new WelcomeEmail($user));
 
         $token = $user->createToken($request->input('device_name', 'api'))->plainTextToken;
 

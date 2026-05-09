@@ -4,6 +4,8 @@ namespace App\Http\Controllers\Api\V1\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Http\Resources\ProviderResource;
+use App\Jobs\SendEmailJob;
+use App\Mail\ProviderVerification;
 use App\Models\Provider;
 use App\Models\ProviderCertification;
 use App\Models\ProviderDocument;
@@ -200,6 +202,13 @@ class AdminProviderController extends Controller
 
         $provider = $provider->fresh(['user', 'services.category'])->loadCount('reviews');
 
+        if ($shouldVerify && $provider->user) {
+            SendEmailJob::dispatchSync(
+                $provider->user->email,
+                new ProviderVerification($provider->user->name)
+            );
+        }
+
         return response()->json([
             'success' => true,
             'message' => $shouldVerify ? 'Provider verified successfully' : 'Provider unverified',
@@ -241,6 +250,13 @@ class AdminProviderController extends Controller
         }
 
         $provider = $provider->fresh(['user', 'services.category'])->loadCount('reviews');
+
+        if ($provider->user) {
+            SendEmailJob::dispatchSync(
+                $provider->user->email,
+                new ProviderVerification($provider->user->name)
+            );
+        }
 
         return response()->json([
             'success' => true,
