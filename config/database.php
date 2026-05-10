@@ -3,6 +3,27 @@
 use Illuminate\Support\Str;
 use Pdo\Mysql;
 
+if (! function_exists('sp_mysql_password')) {
+    /**
+     * DB_PASSWORD, else MYSQL_PASSWORD env, else one-line file database/.dbpass (gitignored).
+     */
+    function sp_mysql_password(): string
+    {
+        if (filled((string) env('DB_PASSWORD', ''))) {
+            return (string) env('DB_PASSWORD');
+        }
+        if (filled((string) env('MYSQL_PASSWORD', ''))) {
+            return (string) env('MYSQL_PASSWORD');
+        }
+        $path = database_path('.dbpass');
+        if (is_file($path)) {
+            return trim((string) file_get_contents($path));
+        }
+
+        return '';
+    }
+}
+
 return [
 
     /*
@@ -51,7 +72,7 @@ return [
             'port' => env('DB_PORT', '3306'),
             'database' => env('DB_DATABASE', 'laravel'),
             'username' => env('DB_USERNAME', 'root'),
-            'password' => env('DB_PASSWORD', ''),
+            'password' => sp_mysql_password(),
             'unix_socket' => env('DB_SOCKET', ''),
             'charset' => env('DB_CHARSET', 'utf8mb4'),
             'collation' => env('DB_COLLATION', 'utf8mb4_unicode_ci'),
@@ -71,7 +92,7 @@ return [
             'port' => env('DB_PORT', '3306'),
             'database' => env('DB_DATABASE', 'laravel'),
             'username' => env('DB_USERNAME', 'root'),
-            'password' => env('DB_PASSWORD', ''),
+            'password' => sp_mysql_password(),
             'unix_socket' => env('DB_SOCKET', ''),
             'charset' => env('DB_CHARSET', 'utf8mb4'),
             'collation' => env('DB_COLLATION', 'utf8mb4_unicode_ci'),

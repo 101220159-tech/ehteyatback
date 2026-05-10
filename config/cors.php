@@ -1,6 +1,6 @@
 <?php
 
-$defaultFrontend = 'http://localhost:3000';
+$defaultFrontend = 'http://localhost:5173';
 $frontend = env('FRONTEND_URL', $defaultFrontend);
 $extra = env('CORS_ALLOWED_ORIGINS');
 

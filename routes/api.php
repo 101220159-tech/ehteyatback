@@ -3,6 +3,7 @@
 use App\Http\Controllers\Api\V1\Admin\AdminAreaController;
 use App\Http\Controllers\Api\V1\Admin\AdminBackupStatusController;
 use App\Http\Controllers\Api\V1\Admin\AdminBookingController;
+use App\Http\Controllers\Api\V1\Admin\AdminChatController;
 use App\Http\Controllers\Api\V1\Admin\AdminCategoryController;
 use App\Http\Controllers\Api\V1\Admin\AdminDashboardController;
 use App\Http\Controllers\Api\V1\Admin\AdminNotificationController;
@@ -245,6 +246,26 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
     Route::middleware(['auth:sanctum', 'role:super_admin,admin', 'throttle:api'])->prefix('admin')->group(function () {
         // Dashboard
         Route::get('dashboard/stats',               [AdminDashboardController::class, 'stats']);
+
+        // Chats (moderation — list + messages; Echo channel auth includes admin in routes/channels.php)
+        Route::get('chats',                         [AdminChatController::class, 'index']);
+        Route::post('chats',                        [AdminChatController::class, 'store']);
+        Route::get('chats/{id}/messages',           [AdminChatController::class, 'messages'])->whereUuid('id');
+        Route::post('chats/{id}/messages',          [AdminChatController::class, 'sendMessage'])->whereUuid('id');
+        Route::put('chats/{id}/messages/{msgId}/read', [AdminChatController::class, 'markMessageRead'])->whereUuid('id')->whereUuid('msgId');
+        // Admin multi-user groups (name + member_ids) — distinct from POST chats (customer_id + provider_id)
+        Route::get('chat/groups',                   [AdminChatController::class, 'index']);
+        Route::post('chat/groups',                  [AdminChatController::class, 'storeGroup']);
+        Route::get('chats/groups',                  [AdminChatController::class, 'index']);
+        Route::post('chats/groups',                 [AdminChatController::class, 'storeGroup']);
+        Route::get('chat-groups/{id}/messages',     [AdminChatController::class, 'groupMessages'])->whereUuid('id');
+        Route::post('chat-groups/{id}/messages',    [AdminChatController::class, 'sendGroupMessage'])->whereUuid('id');
+        Route::put('chat-groups/{id}/messages/{msgId}/read', [AdminChatController::class, 'markGroupMessageRead'])->whereUuid('id')->whereUuid('msgId');
+        Route::get('chats/groups/{id}/messages',     [AdminChatController::class, 'groupMessages'])->whereUuid('id');
+        Route::post('chats/groups/{id}/messages',    [AdminChatController::class, 'sendGroupMessage'])->whereUuid('id');
+        Route::put('chats/groups/{id}/messages/{msgId}/read', [AdminChatController::class, 'markGroupMessageRead'])->whereUuid('id')->whereUuid('msgId');
+        Route::get('chat-groups',                   [AdminChatController::class, 'index']);
+        Route::post('chat-groups',                  [AdminChatController::class, 'storeGroup']);
 
         // Users
         Route::get('users',                         [AdminUserController::class, 'index']);

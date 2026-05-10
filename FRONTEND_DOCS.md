@@ -436,6 +436,18 @@ No payload. Same as `verify` with `is_verified: true` — assigns provider role 
 { "allow_chat": true }
 ```
 
+#### Admin chat / “groups” (moderation)
+Same data as customer–provider chats; aliases exist so different frontends do not 404.
+
+- **GET** `/admin/chats` — paginated list of all chats.
+- **POST** `/admin/chats` — open or create a thread: `{ "customer_id": "<user-uuid>", "provider_id": "<provider-uuid>" }` (201 if created, 200 if already existed).
+- **GET** `/admin/chats/{id}/messages` — messages in a chat.
+
+Compat paths (same handlers as above):
+
+- **GET|POST** `/admin/chat/groups`
+- **GET|POST** `/admin/chats/groups`
+
 #### Toggle VIP Status
 **PUT** `/admin/providers/{id}/vip`
 ```json
@@ -1143,6 +1155,8 @@ ACCEPTED → [Mark Complete] → COMPLETED
 #### List Messages in a Chat
 **GET** `/provider/chats/{id}/messages`
 
+> **Pagination:** Messages are ordered oldest → newest. If you **omit** `page`, the API defaults to the **last** page (newest “window”). That avoids a refetch after sending returning only `page=1` (oldest chunk) and making the new bubble disappear briefly. Pass `page` explicitly when loading older history (e.g. `page=1` for the oldest segment, or previous pages when scrolling up).
+
 **Response:**
 ```json
 {
@@ -1164,6 +1178,15 @@ ACCEPTED → [Mark Complete] → COMPLETED
 ```json
 { "body": "I can come tomorrow at 10 AM." }
 ```
+
+Headers (recommended):
+
+- **`X-Socket-ID`**: Value from Laravel Echo / Pusher (`Echo.socketId()`). Lets the server exclude your WebSocket when broadcasting so you do **not** get the same `message.sent` event again a few seconds later (duplicate bubble).
+- **`Idempotency-Key`**: Optional UUID (or unique string) per user action. If the client retries the same POST (double submit, React Strict Mode), the API returns the existing message with **200** instead of inserting a second row.
+
+Backend also deduplicates: same user, same chat, **same body within ~10 seconds** → returns the first message (**200**), no second row / no second broadcast. Repeat the exact same text after a short pause if you need two identical lines.
+
+Live broadcasts use **`ShouldBroadcastNow`** (no queue delay). The UI should still ignore Echo `message.sent` when `payload.sender_id === currentUser.id` if you ever see a stray duplicate.
 
 #### Mark Message as Read
 **PUT** `/provider/chats/{id}/messages/{msgId}/read`
@@ -1472,6 +1495,8 @@ Returns existing chat if one already exists.
 
 #### List Messages
 **GET** `/customer/chats/{id}/messages`
+
+> Same pagination rule as provider messages: omit `page` to get the **latest** window by default; pass `page` when loading older history.
 
 #### Send Message
 **POST** `/customer/chats/{id}/messages`

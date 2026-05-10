@@ -8,19 +8,19 @@ use Illuminate\Contracts\Broadcasting\ShouldBroadcastNow;
 use Illuminate\Foundation\Events\Dispatchable;
 use Illuminate\Queue\SerializesModels;
 
-class MessageRead implements ShouldBroadcastNow
+class AdminChatGroupMessageRead implements ShouldBroadcastNow
 {
     use Dispatchable, InteractsWithSockets, SerializesModels;
 
     public function __construct(
-        public string $chatId,
+        public string $groupId,
         public string $messageId,
         public string $readBy,
     ) {}
 
     public function broadcastOn(): array
     {
-        return [new PrivateChannel('chat.'.$this->chatId)];
+        return [new PrivateChannel('chat.'.$this->groupId)];
     }
 
     public function broadcastAs(): string
@@ -28,10 +28,14 @@ class MessageRead implements ShouldBroadcastNow
         return 'message.read';
     }
 
+    /**
+     * @return array<string, mixed>
+     */
     public function broadcastWith(): array
     {
         return [
-            'chat_id'    => $this->chatId,
+            'chat_id'    => $this->groupId,
+            'group_id'   => $this->groupId,
             'message_id' => $this->messageId,
             'read_by'    => $this->readBy,
         ];

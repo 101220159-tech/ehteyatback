@@ -21,4 +21,12 @@ class MessageRequest extends FormRequest
             'type' => ['nullable', 'in:text,image'],
         ];
     }
+
+    protected function prepareForValidation(): void
+    {
+        $body = $this->input('body');
+        if (($body === null || $body === '') && ($alt = $this->input('message') ?? $this->input('message_text'))) {
+            $this->merge(['body' => $alt]);
+        }
+    }
 }

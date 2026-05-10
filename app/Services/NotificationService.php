@@ -19,7 +19,10 @@ class NotificationService
             'data'    => $data,
         ]);
 
-        SendNotificationJob::dispatch($notification->id, ['in_app']);
+        // With QUEUE_CONNECTION=sync the job would otherwise run before the HTTP response is sent.
+        dispatch(function () use ($notification) {
+            SendNotificationJob::dispatch($notification->id, ['in_app']);
+        })->afterResponse();
 
         return $notification;
     }

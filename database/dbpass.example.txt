@@ -1,0 +1,9 @@
+Put your MySQL password on a single line, save this file as:
+
+  database/.dbpass
+
+(no extension). That file is gitignored. Leave DB_PASSWORD empty in .env if you use this.
+
+PowerShell (from project root):
+
+  Set-Content -Path "database\.dbpass" -Value "YOUR_MYSQL_PASSWORD" -NoNewline -Encoding utf8
