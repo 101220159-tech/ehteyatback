@@ -2,18 +2,22 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class ChatbotConversation extends Model
 {
-    protected $fillable = ['user_id', 'started_at'];
+    use HasUuids;
+
+    protected $fillable = ['user_id', 'status'];
 
     protected function casts(): array
     {
         return [
-            'started_at' => 'datetime',
+            'created_at' => 'datetime',
+            'updated_at' => 'datetime',
         ];
     }
 

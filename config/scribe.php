@@ -14,7 +14,7 @@ return [
     'title' => config('app.name').' API Documentation',
 
     // A short description of your API. Will be included in the docs webpage, Postman collection and OpenAPI spec.
-    'description' => 'REST API for the Service Platform (customers, providers, admin). Authenticate with Sanctum Bearer tokens.',
+    'description' => 'REST API for NexVex (customers, providers, admin). Authenticate with Sanctum Bearer tokens.',
 
     // Text to place in the "Introduction" section, right after the `description`. Markdown and HTML are supported.
     'intro_text' => <<<'INTRO'

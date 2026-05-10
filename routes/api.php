@@ -17,6 +17,7 @@ use App\Http\Controllers\Api\V1\Admin\AdminServiceController;
 use App\Http\Controllers\Api\V1\Admin\AdminUserController;
 use App\Http\Controllers\Api\V1\Admin\AdminZoneController;
 use App\Http\Controllers\Api\V1\AuthController;
+use App\Http\Controllers\Api\V1\ChatbotController;
 use App\Http\Controllers\Api\V1\Customer\CustomerAddressController;
 use App\Http\Controllers\Api\V1\Customer\CustomerZoneController;
 use App\Http\Controllers\Api\V1\Customer\CustomerBookingController;
@@ -158,6 +159,13 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
         Route::get('profile/location',              [CustomerProfileController::class, 'getLocation']);
         Route::post('profile/location',             [CustomerProfileController::class, 'updateLocation']);
         Route::put('profile',                       [CustomerProfileController::class, 'update']);
+
+        // AI chatbot (local Llama via Ollama)
+        Route::prefix('chatbot')->group(function () {
+            Route::post('/message', [ChatbotController::class, 'message']);
+            Route::get('/conversations', [ChatbotController::class, 'conversations']);
+            Route::get('/conversations/{id}', [ChatbotController::class, 'showConversation'])->whereUuid('id');
+        });
     });
 
     // ── Provider ──────────────────────────────────────────────────────────

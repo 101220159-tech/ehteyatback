@@ -83,11 +83,30 @@ class AdminProviderController extends Controller
 
     public function index(Request $request): JsonResponse
     {
-        $items = Provider::query()
+        $query = Provider::query()
             ->with(['user', 'zones'])
             ->withCount(['reviews', 'zones'])
-            ->orderByDesc('id')
-            ->paginate($request->integer('per_page', 15));
+            ->orderByDesc('created_at');
+
+        if ($request->filled('search')) {
+            $raw = $request->string('search')->trim()->toString();
+            if ($raw !== '') {
+                $term = '%'.$raw.'%';
+                $query->where(function ($q) use ($term) {
+                    $q->where('bio', 'LIKE', $term)
+                        ->orWhere('google_place_id', 'LIKE', $term)
+                        ->orWhereHas('user', function ($uq) use ($term) {
+                            $uq->where('name', 'LIKE', $term)
+                                ->orWhere('email', 'LIKE', $term)
+                                ->orWhere('phone', 'LIKE', $term)
+                                ->orWhere('address', 'LIKE', $term);
+                        })
+                        ->orWhereHas('services', fn ($sq) => $sq->where('name', 'LIKE', $term));
+                });
+            }
+        }
+
+        $items = $query->paginate($request->integer('per_page', 15));
 
         return ProviderResource::collection($items)->response();
     }

@@ -29,6 +29,7 @@ class Provider extends Model
         'avatar_url',
         'latitude',
         'longitude',
+        'google_place_id',
     ];
 
     protected function casts(): array

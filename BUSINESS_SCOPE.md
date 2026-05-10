@@ -5,7 +5,7 @@
 
 ## What Is This App?
 
-**SP (Service Platform)** is a **home & professional services marketplace** built for the Lebanese market. It connects customers who need skilled tradespeople (plumbers, electricians, painters, cleaners, etc.) with verified, subscribed service providers. Think of it as a local Uber for home services — the customer opens the app, finds a provider near them, books a time slot, and tracks the job from request to completion.
+**NexVex** is a **home & professional services marketplace** built for the Lebanese market. It connects customers who need skilled tradespeople (plumbers, electricians, painters, cleaners, etc.) with verified, subscribed service providers. Think of it as a local Uber for home services — the customer opens the app, finds a provider near them, books a time slot, and tracks the job from request to completion.
 
 The platform has **three separate user experiences** (three dashboards, built as one product):
 

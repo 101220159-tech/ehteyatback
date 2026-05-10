@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-echo "Deploying Service Platform..."
+echo "Deploying NexVex..."
 
 git pull origin main
 

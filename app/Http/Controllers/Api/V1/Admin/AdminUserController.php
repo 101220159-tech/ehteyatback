@@ -14,10 +14,28 @@ class AdminUserController extends Controller
 {
     public function index(Request $request): JsonResponse
     {
-        $users = User::query()
+        $query = User::query()
             ->with(['role.permissions', 'directPermissions'])
-            ->orderByDesc('created_at')
-            ->paginate($request->integer('per_page', 15));
+            // Stable directory order so seeded (newest) rows do not crowd out older accounts on page 1
+            ->orderBy('name')
+            ->orderBy('email');
+
+        if ($request->filled('search')) {
+            $raw = $request->string('search')->trim()->toString();
+            if ($raw !== '') {
+                $term = '%'.$raw.'%';
+                $query->where(function ($q) use ($term) {
+                    $q->where('name', 'LIKE', $term)
+                        ->orWhere('email', 'LIKE', $term)
+                        ->orWhere('phone', 'LIKE', $term)
+                        ->orWhereHas('role', fn ($rq) => $rq->where('name', 'LIKE', $term));
+                });
+            }
+        }
+
+        $perPage = min(200, max(1, $request->integer('per_page', 100)));
+
+        $users = $query->paginate($perPage);
 
         return UserResource::collection($users)->response();
     }

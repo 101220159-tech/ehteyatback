@@ -9,6 +9,7 @@ use App\Models\Provider;
 use App\Models\ProviderAvailability;
 use App\Services\BookingNotificationService;
 use App\Services\NotificationService;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -106,11 +107,18 @@ class CustomerBookingController extends Controller
         $conflict = Booking::where('provider_id', $provider->id)
             ->where('status', 'accepted')
             ->where(function ($q) use ($scheduledAt, $endTime) {
-                $q->whereBetween('scheduled_at', [$scheduledAt, $endTime])
-                  ->orWhereRaw(
-                      "DATE_ADD(scheduled_at, INTERVAL duration_minutes MINUTE) BETWEEN ? AND ?",
-                      [$scheduledAt, $endTime]
-                  );
+                $q->whereBetween('scheduled_at', [$scheduledAt, $endTime]);
+                if (DB::connection()->getDriverName() === 'sqlite') {
+                    $q->orWhereRaw(
+                        "datetime(scheduled_at, '+' || duration_minutes || ' minutes') BETWEEN ? AND ?",
+                        [$scheduledAt->format('Y-m-d H:i:s'), $endTime->format('Y-m-d H:i:s')]
+                    );
+                } else {
+                    $q->orWhereRaw(
+                        'DATE_ADD(scheduled_at, INTERVAL duration_minutes MINUTE) BETWEEN ? AND ?',
+                        [$scheduledAt, $endTime]
+                    );
+                }
             })
             ->exists();
 

@@ -1,6 +1,6 @@
-# Service Provider Platform — API
+# NexVex — API
 
-Laravel API backend with Sanctum token authentication, custom RBAC (roles & permissions), and versioned JSON endpoints under `/api/v1`.
+NexVex backend: Laravel API with Sanctum token authentication, custom RBAC (roles & permissions), and versioned JSON endpoints under `/api/v1`.
 
 > **Note:** This repo uses **Laravel Framework 13** (`laravel/framework` ^13 per `composer.json`). Middleware is registered in `bootstrap/app.php` (there is no `app/Http/Kernel.php`).
 
