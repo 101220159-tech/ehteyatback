@@ -2,8 +2,6 @@
 
 namespace App\Http\Controllers\Api\V1\Admin;
 
-use App\Events\AdminChatGroupMessageRead;
-use App\Events\AdminChatGroupMessageSent;
 use App\Events\MessageRead;
 use App\Events\MessageSent;
 use App\Http\Controllers\Concerns\BroadcastsChatEventWithSocket;
@@ -13,8 +11,6 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\MessageRequest;
 use App\Http\Resources\ChatResource;
 use App\Http\Resources\MessageResource;
-use App\Models\AdminChatGroup;
-use App\Models\AdminChatGroupMessage;
 use App\Models\Chat;
 use App\Models\Message;
 use App\Models\Provider;
@@ -62,138 +58,7 @@ class AdminChatController extends Controller
             ->orderByDesc('updated_at')
             ->paginate($request->integer('per_page', 15));
 
-        $payload = ChatResource::collection($items)->toArray($request);
-
-        $groups = AdminChatGroup::query()
-            ->with('users')
-            ->orderBy('name')
-            ->get()
-            ->map(fn (AdminChatGroup $g) => $this->serializeAdminGroup($g));
-
-        $payload['data'] = array_merge(
-            $groups->all(),
-            $payload['data'] ?? [],
-        );
-
-        return response()->json($payload);
-    }
-
-    /**
-     * Admin-only multi-user groups (name + member_ids) for moderation / broadcasts.
-     */
-    public function storeGroup(Request $request): JsonResponse
-    {
-        $data = $request->validate([
-            'name' => ['nullable', 'string', 'max:160'],
-            'member_ids' => ['required', 'array', 'min:2'],
-            'member_ids.*' => ['uuid', 'exists:users,id'],
-        ]);
-
-        $name = isset($data['name']) && $data['name'] !== ''
-            ? $data['name']
-            : 'Group';
-
-        $memberIds = collect($data['member_ids'])->unique()->values()->all();
-
-        $group = AdminChatGroup::query()->create(['name' => $name]);
-        $group->users()->sync($memberIds);
-        $group->load('users');
-
-        return response()->json([
-            'data' => $this->serializeAdminGroup($group),
-        ], 201);
-    }
-
-    /**
-     * @return array<string, mixed>
-     */
-    private function serializeAdminGroup(AdminChatGroup $g): array
-    {
-        return [
-            'id' => $g->id,
-            'name' => $g->name,
-            'group_name' => $g->name,
-            'member_ids' => $g->users->pluck('id')->values()->all(),
-            'members' => $g->users->map(fn (User $u) => [
-                'id' => $u->id,
-                'name' => $u->name,
-                'email' => $u->email,
-            ])->values()->all(),
-            'unread_count' => 0,
-            'last_message_at' => null,
-            'customer_id' => null,
-            'provider_id' => null,
-            'is_admin_group' => true,
-            'created_at' => $g->created_at,
-            'updated_at' => $g->updated_at,
-        ];
-    }
-
-    public function groupMessages(Request $request, string $id): JsonResponse
-    {
-        $group = AdminChatGroup::query()->findOrFail($id);
-
-        $messages = $this->paginateAdminGroupMessages($group->messages(), $request)
-            ->through(fn (AdminChatGroupMessage $m) => $this->serializeGroupMessage($m));
-
-        return response()->json($messages);
-    }
-
-    public function sendGroupMessage(MessageRequest $request, string $id): JsonResponse
-    {
-        $group = AdminChatGroup::query()->findOrFail($id);
-
-        $message = AdminChatGroupMessage::query()->create([
-            'admin_chat_group_id' => $group->id,
-            'sender_id'           => $request->user()->id,
-            'body'                => $request->input('body'),
-            'type'                => $request->input('type', 'text'),
-        ]);
-
-        $this->broadcastChatEventWithSocket($request, fn () => new AdminChatGroupMessageSent($message));
-
-        return response()->json([
-            'data' => $this->serializeGroupMessage($message),
-        ], 201);
-    }
-
-    public function markGroupMessageRead(Request $request, string $id, string $msgId): JsonResponse
-    {
-        $group = AdminChatGroup::query()->findOrFail($id);
-
-        $message = AdminChatGroupMessage::query()
-            ->where('admin_chat_group_id', $group->id)
-            ->findOrFail($msgId);
-
-        $message->update(['read_at' => now()]);
-
-        $groupId = (string) $group->id;
-        $messageId = (string) $message->id;
-        $readerId = (string) $request->user()->id;
-        $this->broadcastChatEventWithSocket(
-            $request,
-            fn () => new AdminChatGroupMessageRead($groupId, $messageId, $readerId)
-        );
-
-        return response()->json(['ok' => true]);
-    }
-
-    /**
-     * @return array<string, mixed>
-     */
-    private function serializeGroupMessage(AdminChatGroupMessage $m): array
-    {
-        return [
-            'id'         => $m->id,
-            'group_id'   => $m->admin_chat_group_id,
-            'chat_id'    => $m->admin_chat_group_id,
-            'sender_id'  => $m->sender_id,
-            'body'       => $m->body,
-            'type'       => $m->type,
-            'is_read'    => $m->read_at !== null,
-            'read_at'    => $m->read_at,
-            'created_at' => $m->created_at,
-        ];
+        return ChatResource::collection($items)->response();
     }
 
     /**

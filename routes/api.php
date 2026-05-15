@@ -14,6 +14,7 @@ use App\Http\Controllers\Api\V1\Admin\AdminProviderProjectController;
 use App\Http\Controllers\Api\V1\Admin\AdminReviewController;
 use App\Http\Controllers\Api\V1\Admin\AdminRoleController;
 use App\Http\Controllers\Api\V1\Admin\AdminServiceController;
+use App\Http\Controllers\Api\V1\Admin\AdminTransportController;
 use App\Http\Controllers\Api\V1\Admin\AdminUserController;
 use App\Http\Controllers\Api\V1\Admin\AdminZoneController;
 use App\Http\Controllers\Api\V1\AuthController;
@@ -26,6 +27,7 @@ use App\Http\Controllers\Api\V1\Customer\CustomerDashboardController;
 use App\Http\Controllers\Api\V1\Customer\CustomerNotificationController;
 use App\Http\Controllers\Api\V1\Customer\CustomerProfileController;
 use App\Http\Controllers\Api\V1\Customer\CustomerReviewController;
+use App\Http\Controllers\Api\V1\Customer\CustomerTransportController;
 use App\Http\Controllers\Api\V1\Customer\SearchController;
 use App\Http\Controllers\Api\V1\MapsController;
 use App\Http\Controllers\Api\V1\Provider\ProviderAvailabilityController;
@@ -38,6 +40,7 @@ use App\Http\Controllers\Api\V1\Provider\ProviderEarningsController;
 use App\Http\Controllers\Api\V1\Provider\ProviderProfileController;
 use App\Http\Controllers\Api\V1\Provider\ProviderProjectController;
 use App\Http\Controllers\Api\V1\Provider\ProviderReviewController;
+use App\Http\Controllers\Api\V1\Provider\ProviderScheduleController;
 use App\Http\Controllers\Api\V1\Provider\ProviderServiceController;
 use App\Http\Controllers\Api\V1\Provider\ProviderStatusController;
 use App\Http\Controllers\Api\V1\PublicProviderController;
@@ -166,6 +169,24 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
             Route::get('/conversations', [ChatbotController::class, 'conversations']);
             Route::get('/conversations/{id}', [ChatbotController::class, 'showConversation'])->whereUuid('id');
         });
+
+        // Taxi & delivery transport (shared map + pricing on frontend)
+        Route::prefix('transport')->group(function () {
+            Route::get('route/calculate', [CustomerTransportController::class, 'routeCalculate']);
+            Route::get('estimate', [CustomerTransportController::class, 'estimate']);
+            Route::post('taxi/book', [CustomerTransportController::class, 'bookTaxi']);
+            Route::post('delivery/book', [CustomerTransportController::class, 'bookDelivery']);
+            Route::get('live-tracking', [CustomerTransportController::class, 'liveTracking']);
+        });
+    });
+
+    // Short aliases for mobile / external docs (same customer auth)
+    Route::middleware(['auth:sanctum', 'role:customer', 'throttle:api'])->group(function () {
+        Route::get('route/calculate', [CustomerTransportController::class, 'routeCalculate']);
+        Route::get('booking/estimate-price', [CustomerTransportController::class, 'estimate']);
+        Route::get('booking/live-tracking', [CustomerTransportController::class, 'liveTracking']);
+        Route::post('taxi/book', [CustomerTransportController::class, 'bookTaxi']);
+        Route::post('delivery/book', [CustomerTransportController::class, 'bookDelivery']);
     });
 
     // ── Provider ──────────────────────────────────────────────────────────
@@ -178,13 +199,26 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
         Route::get('status',                        [ProviderStatusController::class, 'show']);
         Route::put('status',                        [ProviderStatusController::class, 'update']);
 
+        // Schedule management
+        Route::get('schedule',                      [ProviderScheduleController::class, 'index']);
+        Route::get('calendar/events',               [ProviderScheduleController::class, 'calendarEvents']);
+
         // Bookings
         Route::get('bookings',                      [ProviderBookingController::class, 'index']);
         Route::get('bookings/{id}',                 [ProviderBookingController::class, 'show'])->whereUuid('id');
         Route::put('bookings/{id}/accept',          [ProviderBookingController::class, 'accept'])->whereUuid('id');
+        Route::post('bookings/{id}/accept',         [ProviderBookingController::class, 'accept'])->whereUuid('id');
         Route::put('bookings/{id}/reject',          [ProviderBookingController::class, 'reject'])->whereUuid('id');
+        Route::put('bookings/{id}/cancel',          [ProviderBookingController::class, 'cancel'])->whereUuid('id');
+        Route::post('bookings/{id}/cancel',         [ProviderBookingController::class, 'cancel'])->whereUuid('id');
         Route::post('bookings/{id}/reschedule',     [ProviderBookingController::class, 'requestReschedule'])->whereUuid('id');
         Route::put('bookings/{id}/complete',        [ProviderBookingController::class, 'complete'])->whereUuid('id');
+        Route::post('bookings/{id}/complete',        [ProviderBookingController::class, 'complete'])->whereUuid('id');
+
+        // Alias routes (singular booking) for schedule workflow clients
+        Route::post('booking/{id}/accept',          [ProviderBookingController::class, 'accept'])->whereUuid('id');
+        Route::post('booking/{id}/complete',        [ProviderBookingController::class, 'complete'])->whereUuid('id');
+        Route::post('booking/{id}/cancel',          [ProviderBookingController::class, 'cancel'])->whereUuid('id');
 
         // Profile
         Route::get('profile',                       [ProviderProfileController::class, 'show']);
@@ -261,19 +295,6 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
         Route::get('chats/{id}/messages',           [AdminChatController::class, 'messages'])->whereUuid('id');
         Route::post('chats/{id}/messages',          [AdminChatController::class, 'sendMessage'])->whereUuid('id');
         Route::put('chats/{id}/messages/{msgId}/read', [AdminChatController::class, 'markMessageRead'])->whereUuid('id')->whereUuid('msgId');
-        // Admin multi-user groups (name + member_ids) — distinct from POST chats (customer_id + provider_id)
-        Route::get('chat/groups',                   [AdminChatController::class, 'index']);
-        Route::post('chat/groups',                  [AdminChatController::class, 'storeGroup']);
-        Route::get('chats/groups',                  [AdminChatController::class, 'index']);
-        Route::post('chats/groups',                 [AdminChatController::class, 'storeGroup']);
-        Route::get('chat-groups/{id}/messages',     [AdminChatController::class, 'groupMessages'])->whereUuid('id');
-        Route::post('chat-groups/{id}/messages',    [AdminChatController::class, 'sendGroupMessage'])->whereUuid('id');
-        Route::put('chat-groups/{id}/messages/{msgId}/read', [AdminChatController::class, 'markGroupMessageRead'])->whereUuid('id')->whereUuid('msgId');
-        Route::get('chats/groups/{id}/messages',     [AdminChatController::class, 'groupMessages'])->whereUuid('id');
-        Route::post('chats/groups/{id}/messages',    [AdminChatController::class, 'sendGroupMessage'])->whereUuid('id');
-        Route::put('chats/groups/{id}/messages/{msgId}/read', [AdminChatController::class, 'markGroupMessageRead'])->whereUuid('id')->whereUuid('msgId');
-        Route::get('chat-groups',                   [AdminChatController::class, 'index']);
-        Route::post('chat-groups',                  [AdminChatController::class, 'storeGroup']);
 
         // Users
         Route::get('users',                         [AdminUserController::class, 'index']);
@@ -349,6 +370,12 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
 
         // Bookings
         Route::get('bookings',                      [AdminBookingController::class, 'index']);
+
+        // Taxi & delivery transport bookings
+        Route::get('transport/taxi-bookings',              [AdminTransportController::class, 'taxiBookings']);
+        Route::put('transport/taxi-bookings/{id}',        [AdminTransportController::class, 'updateTaxiStatus'])->whereUuid('id');
+        Route::get('transport/delivery-bookings',         [AdminTransportController::class, 'deliveryBookings']);
+        Route::put('transport/delivery-bookings/{id}',    [AdminTransportController::class, 'updateDeliveryStatus'])->whereUuid('id');
 
         // Reviews
         Route::get('reviews',                       [AdminReviewController::class, 'index']);

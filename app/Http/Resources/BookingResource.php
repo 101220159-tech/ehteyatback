@@ -19,6 +19,10 @@ class BookingResource extends JsonResource
             'service_id'         => $this->service_id,
             'price'              => $this->price !== null ? (float) $this->price : null,
             'scheduled_at'       => $this->scheduled_at,
+            'booking_date'       => $this->scheduled_at?->format('Y-m-d'),
+            'booking_time'       => $this->scheduled_at?->format('H:i'),
+            'address'            => $this->customer_address,
+            'notes'              => $this->customer_notes,
             'duration_minutes'   => $this->duration_minutes,
             'status'             => $this->status,
             'customer_notes'     => $this->customer_notes,
@@ -41,6 +45,7 @@ class BookingResource extends JsonResource
                 'amount'    => $this->earning ? (float) $this->earning->amount : null,
                 'earned_at' => $this->earning?->earned_at,
             ]),
+            'schedule'           => new ProviderScheduleResource($this->whenLoaded('schedule')),
             'created_at'         => $this->created_at,
         ];
     }

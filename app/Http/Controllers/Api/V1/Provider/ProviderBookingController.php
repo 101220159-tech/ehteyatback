@@ -3,16 +3,25 @@
 namespace App\Http\Controllers\Api\V1\Provider;
 
 use App\Http\Controllers\Controller;
+use App\Http\Resources\BookingResource;
+use App\Http\Resources\ProviderScheduleResource;
 use App\Models\Booking;
 use App\Models\BookingRescheduleRequest;
 use App\Models\ProviderEarning;
+use App\Models\ProviderSchedule;
 use App\Services\NotificationService;
+use App\Services\ProviderScheduleService;
+use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class ProviderBookingController extends Controller
 {
-    public function __construct(private NotificationService $notify) {}
+    public function __construct(
+        private NotificationService $notify,
+        private ProviderScheduleService $scheduleService,
+    ) {}
 
     private function provider(Request $request)
     {
@@ -48,25 +57,44 @@ class ProviderBookingController extends Controller
     public function accept(Request $request, string $id): JsonResponse
     {
         $provider = $this->provider($request);
-        $booking  = Booking::where('provider_id', $provider->id)
-            ->where('status', 'pending')
-            ->with(['customer', 'service'])
-            ->findOrFail($id);
 
-        $booking->update(['status' => 'accepted', 'accepted_at' => now()]);
+        $schedule = DB::transaction(function () use ($request, $provider, $id) {
+            $booking = Booking::where('provider_id', $provider->id)
+                ->where('status', 'pending')
+                ->with(['customer', 'service'])
+                ->lockForUpdate()
+                ->findOrFail($id);
 
-        // Notify customer
-        if ($booking->customer) {
-            $this->notify->sendInApp(
-                $booking->customer,
-                'booking_accepted',
-                'Booking Accepted',
-                'Your booking for "'.$booking->service?->name.'" has been accepted.',
-                ['booking_id' => $booking->id]
+            $startsAt = Carbon::parse($booking->scheduled_at);
+            $this->scheduleService->assertNoConflict(
+                $provider->id,
+                $startsAt,
+                (int) ($booking->duration_minutes ?? 60),
+                $booking->id
             );
-        }
 
-        return response()->json(['message' => 'Booking accepted.', 'data' => $booking->fresh()]);
+            $booking->update(['status' => 'accepted', 'accepted_at' => now()]);
+
+            $schedule = $this->scheduleService->syncFromBooking($booking->fresh());
+
+            if ($booking->customer) {
+                $this->notify->sendInApp(
+                    $booking->customer,
+                    'booking_accepted',
+                    'Booking Accepted',
+                    'Your booking for "'.$booking->service?->name.'" has been accepted.',
+                    ['booking_id' => $booking->id]
+                );
+            }
+
+            return $schedule;
+        });
+
+        return response()->json([
+            'message'  => 'Booking accepted and added to your schedule.',
+            'data'     => new BookingResource($schedule->booking),
+            'schedule' => new ProviderScheduleResource($schedule),
+        ]);
     }
 
     public function reject(Request $request, string $id): JsonResponse
@@ -80,7 +108,8 @@ class ProviderBookingController extends Controller
 
         $booking->update(['status' => 'rejected', 'cancelled_at' => now()]);
 
-        // Notify customer
+        ProviderSchedule::where('booking_id', $booking->id)->update(['status' => 'cancelled']);
+
         if ($booking->customer) {
             $this->notify->sendInApp(
                 $booking->customer,
@@ -92,6 +121,42 @@ class ProviderBookingController extends Controller
         }
 
         return response()->json(['message' => 'Booking rejected.', 'data' => $booking->fresh()]);
+    }
+
+    public function cancel(Request $request, string $id): JsonResponse
+    {
+        $provider = $this->provider($request);
+        $data     = $request->validate(['reason' => 'nullable|string|max:500']);
+
+        $schedule = DB::transaction(function () use ($request, $provider, $id, $data) {
+            $booking = Booking::where('provider_id', $provider->id)
+                ->whereIn('status', ['pending', 'accepted', 'reschedule_requested'])
+                ->with(['customer', 'service'])
+                ->lockForUpdate()
+                ->findOrFail($id);
+
+            $booking->update(['status' => 'cancelled', 'cancelled_at' => now()]);
+
+            $schedule = $this->scheduleService->syncFromBooking($booking->fresh());
+
+            if ($booking->customer) {
+                $this->notify->sendInApp(
+                    $booking->customer,
+                    'booking_cancelled',
+                    'Booking Cancelled',
+                    'Your booking for "'.$booking->service?->name.'" was cancelled by the provider.'
+                        .($data['reason'] ? ' Reason: '.$data['reason'] : ''),
+                    ['booking_id' => $booking->id]
+                );
+            }
+
+            return $schedule ?? null;
+        });
+
+        return response()->json([
+            'message'  => 'Booking cancelled.',
+            'schedule' => $schedule ? new ProviderScheduleResource($schedule->load(['booking.customer', 'booking.service'])) : null,
+        ]);
     }
 
     public function requestReschedule(Request $request, string $id): JsonResponse
@@ -117,7 +182,6 @@ class ProviderBookingController extends Controller
 
         $booking->update(['status' => 'reschedule_requested']);
 
-        // Notify customer
         if ($booking->customer) {
             $this->notify->sendInApp(
                 $booking->customer,
@@ -134,39 +198,50 @@ class ProviderBookingController extends Controller
     public function complete(Request $request, string $id): JsonResponse
     {
         $provider = $this->provider($request);
-        $booking  = Booking::where('provider_id', $provider->id)
-            ->where('status', 'accepted')
-            ->with(['customer', 'service'])
-            ->findOrFail($id);
 
-        $data        = $request->validate(['amount' => ['nullable', 'numeric', 'min:0']]);
-        $completedAt = now();
-        $amount      = $data['amount'] ?? $booking->price ?? 0;
+        $result = DB::transaction(function () use ($request, $provider, $id) {
+            $booking = Booking::where('provider_id', $provider->id)
+                ->where('status', 'accepted')
+                ->with(['customer', 'service'])
+                ->lockForUpdate()
+                ->findOrFail($id);
 
-        $booking->update(['status' => 'completed', 'completed_at' => $completedAt]);
-        $provider->update(['is_busy' => false]);
+            $data        = $request->validate(['amount' => ['nullable', 'numeric', 'min:0']]);
+            $completedAt = now();
+            $amount      = $data['amount'] ?? $booking->price ?? 0;
 
-        ProviderEarning::firstOrCreate(
-            ['booking_id' => $booking->id],
-            [
-                'provider_id' => $provider->id,
-                'customer_id' => $booking->customer_id,
-                'amount'      => $amount,
-                'earned_at'   => $completedAt,
-            ]
-        );
+            $booking->update(['status' => 'completed', 'completed_at' => $completedAt]);
+            $provider->update(['is_busy' => false]);
 
-        // Notify customer
-        if ($booking->customer) {
-            $this->notify->sendInApp(
-                $booking->customer,
-                'booking_completed',
-                'Service Completed',
-                'Your "'.$booking->service?->name.'" booking is completed. Please leave a review!',
-                ['booking_id' => $booking->id]
+            ProviderEarning::firstOrCreate(
+                ['booking_id' => $booking->id],
+                [
+                    'provider_id' => $provider->id,
+                    'customer_id' => $booking->customer_id,
+                    'amount'      => $amount,
+                    'earned_at'   => $completedAt,
+                ]
             );
-        }
 
-        return response()->json(['message' => 'Booking marked as completed.', 'data' => $booking->fresh()]);
+            $schedule = $this->scheduleService->syncFromBooking($booking->fresh());
+
+            if ($booking->customer) {
+                $this->notify->sendInApp(
+                    $booking->customer,
+                    'booking_completed',
+                    'Service Completed',
+                    'Your "'.$booking->service?->name.'" booking is completed. Please leave a review!',
+                    ['booking_id' => $booking->id]
+                );
+            }
+
+            return ['booking' => $booking->fresh(), 'schedule' => $schedule];
+        });
+
+        return response()->json([
+            'message'  => 'Booking marked as completed.',
+            'data'     => new BookingResource($result['booking']),
+            'schedule' => new ProviderScheduleResource($result['schedule']),
+        ]);
     }
 }

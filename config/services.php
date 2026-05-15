@@ -40,6 +40,15 @@ return [
         'project_id' => env('FIREBASE_PROJECT_ID'),
     ],
 
+    /*
+    | Path to CA bundle (cacert.pem from https://curl.se/ca/cacert.pem). When set and the file exists,
+    | Laravel applies it to outbound HTTP so Guzzle/cURL can verify Google and other HTTPS APIs.
+    | Use on Windows if you see cURL error 60 (unable to get local issuer certificate) without editing php.ini.
+    */
+    'http' => [
+        'ca_bundle' => env('HTTP_CLIENT_CA_BUNDLE'),
+    ],
+
     'google_maps' => [
         'key' => env('GOOGLE_MAPS_API_KEY'),
     ],

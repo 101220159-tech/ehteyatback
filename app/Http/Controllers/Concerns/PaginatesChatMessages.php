@@ -20,14 +20,6 @@ trait PaginatesChatMessages
         return $this->paginateMessagesForRelation($chat->messages(), $request);
     }
 
-    /**
-     * Same pagination rules for admin multi-user groups (AdminChatGroup messages).
-     */
-    protected function paginateAdminGroupMessages(Relation $messages, Request $request): LengthAwarePaginator
-    {
-        return $this->paginateMessagesForRelation($messages, $request);
-    }
-
     protected function paginateMessagesForRelation(Relation $messages, Request $request): LengthAwarePaginator
     {
         $perPage = min(max(1, $request->integer('per_page', 50)), 100);

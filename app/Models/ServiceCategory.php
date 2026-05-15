@@ -2,13 +2,16 @@
 
 namespace App\Models;
 
+use Database\Factories\ServiceCategoryFactory;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class ServiceCategory extends Model
 {
-    use HasUuids;
+    /** @use HasFactory<ServiceCategoryFactory> */
+    use HasFactory, HasUuids;
 
     protected $fillable = ['name', 'description', 'icon_url'];
 

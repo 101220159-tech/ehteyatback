@@ -2,7 +2,9 @@
 
 namespace App\Models;
 
+use Database\Factories\ProviderFactory;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
@@ -11,7 +13,8 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class Provider extends Model
 {
-    use HasUuids;
+    /** @use HasFactory<ProviderFactory> */
+    use HasFactory, HasUuids;
 
     protected $fillable = [
         'user_id',
@@ -92,6 +95,11 @@ class Provider extends Model
     public function bookings(): HasMany
     {
         return $this->hasMany(Booking::class);
+    }
+
+    public function schedules(): HasMany
+    {
+        return $this->hasMany(ProviderSchedule::class);
     }
 
     public function reviews(): HasMany
