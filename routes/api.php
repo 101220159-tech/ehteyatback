@@ -289,6 +289,13 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
         // Dashboard
         Route::get('dashboard/stats',               [AdminDashboardController::class, 'stats']);
 
+        // AI assistant (RECO — same as customer chatbot, scoped to admin user)
+        Route::prefix('chatbot')->group(function () {
+            Route::post('/message', [ChatbotController::class, 'message']);
+            Route::get('/conversations', [ChatbotController::class, 'conversations']);
+            Route::get('/conversations/{id}', [ChatbotController::class, 'showConversation'])->whereUuid('id');
+        });
+
         // Chats (moderation — list + messages; Echo channel auth includes admin in routes/channels.php)
         Route::get('chats',                         [AdminChatController::class, 'index']);
         Route::post('chats',                        [AdminChatController::class, 'store']);
