@@ -5,16 +5,22 @@ namespace App\Http\Controllers\Api\V1\Customer;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\BookingResource;
 use App\Models\Booking;
+use App\Services\StatisticsService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 class CustomerDashboardController extends Controller
 {
+    public function __construct(
+        protected StatisticsService $statistics,
+    ) {}
+
     public function dashboard(Request $request): JsonResponse
     {
         $user = $request->user();
 
         return response()->json([
+            'statistics' => $this->statistics->customerSummary($user->id),
             'upcoming_bookings' => BookingResource::collection(
                 Booking::query()
                     ->where('customer_id', $user->id)
@@ -38,5 +44,13 @@ class CustomerDashboardController extends Controller
             ->paginate($request->integer('per_page', 15));
 
         return BookingResource::collection($bookings)->response();
+    }
+
+    public function statistics(Request $request): JsonResponse
+    {
+        return response()->json([
+            'success' => true,
+            'data' => $this->statistics->customerSummary($request->user()->id),
+        ]);
     }
 }

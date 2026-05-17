@@ -6,6 +6,7 @@ use App\Http\Controllers\Api\V1\Admin\AdminBookingController;
 use App\Http\Controllers\Api\V1\Admin\AdminChatController;
 use App\Http\Controllers\Api\V1\Admin\AdminCategoryController;
 use App\Http\Controllers\Api\V1\Admin\AdminDashboardController;
+use App\Http\Controllers\Api\V1\Admin\AdminStatisticsController;
 use App\Http\Controllers\Api\V1\Admin\AdminNotificationController;
 use App\Http\Controllers\Api\V1\Admin\AdminPaymentController;
 use App\Http\Controllers\Api\V1\Admin\AdminPermissionController;
@@ -119,6 +120,7 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
     Route::middleware(['auth:sanctum', 'role:customer', 'throttle:api'])->prefix('customer')->group(function () {
         // Dashboard
         Route::get('dashboard',                     [CustomerDashboardController::class, 'dashboard']);
+        Route::get('dashboard/statistics',          [CustomerDashboardController::class, 'statistics']);
         Route::get('history',                       [CustomerDashboardController::class, 'history']);
 
         // Bookings
@@ -209,6 +211,7 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
         Route::put('bookings/{id}/accept',          [ProviderBookingController::class, 'accept'])->whereUuid('id');
         Route::post('bookings/{id}/accept',         [ProviderBookingController::class, 'accept'])->whereUuid('id');
         Route::put('bookings/{id}/reject',          [ProviderBookingController::class, 'reject'])->whereUuid('id');
+        Route::post('bookings/{id}/reject',         [ProviderBookingController::class, 'reject'])->whereUuid('id');
         Route::put('bookings/{id}/cancel',          [ProviderBookingController::class, 'cancel'])->whereUuid('id');
         Route::post('bookings/{id}/cancel',         [ProviderBookingController::class, 'cancel'])->whereUuid('id');
         Route::post('bookings/{id}/reschedule',     [ProviderBookingController::class, 'requestReschedule'])->whereUuid('id');
@@ -266,6 +269,7 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
 
         // Reviews
         Route::get('reviews',                       [ProviderReviewController::class, 'index']);
+        Route::get('reviews/analyze',               [ProviderReviewController::class, 'analyze']);
 
         // Chat
         Route::get('chats',                         [ProviderChatController::class, 'index']);
@@ -276,6 +280,7 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
 
         // Earnings
         Route::get('earnings',                      [ProviderEarningsController::class, 'index']);
+        Route::get('earnings/chart',                [ProviderEarningsController::class, 'chart']);
 
         // Notifications
         Route::get('notifications',                 [\App\Http\Controllers\Api\V1\Provider\ProviderNotificationController::class, 'index']);
@@ -286,10 +291,12 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
     // ── Admin / Super Admin ───────────────────────────────────────────────
 
     Route::middleware(['auth:sanctum', 'role:super_admin,admin', 'throttle:api'])->prefix('admin')->group(function () {
-        // Dashboard
+        // Dashboard & statistics
         Route::get('dashboard/stats',               [AdminDashboardController::class, 'stats']);
+        Route::get('dashboard/stats/overview',      [AdminStatisticsController::class, 'overview']);
+        Route::get('dashboard/stats/bookings-by-day', [AdminStatisticsController::class, 'bookingsByDay']);
 
-        // AI assistant (RECO — same as customer chatbot, scoped to admin user)
+        // RECO chatbot (Ollama — admin scope)
         Route::prefix('chatbot')->group(function () {
             Route::post('/message', [ChatbotController::class, 'message']);
             Route::get('/conversations', [ChatbotController::class, 'conversations']);

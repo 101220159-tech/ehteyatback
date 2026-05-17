@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Concerns;
 
+use App\Support\SafeBroadcast;
 use Illuminate\Http\Request;
 
 trait BroadcastsChatEventWithSocket
@@ -18,6 +19,6 @@ trait BroadcastsChatEventWithSocket
         if (is_string($socketId) && $socketId !== '') {
             $event->socket = $socketId;
         }
-        broadcast($event);
+        SafeBroadcast::send($event);
     }
 }

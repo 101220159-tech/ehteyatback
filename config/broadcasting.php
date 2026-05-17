@@ -15,7 +15,12 @@ return [
     |
     */
 
-    'default' => env('BROADCAST_CONNECTION', 'null'),
+    /*
+    | When REVERB_ENABLED=false, broadcasting is disabled unless BROADCAST_CONNECTION is set explicitly.
+    | Start the server: php artisan reverb:start
+    */
+    'default' => env('BROADCAST_CONNECTION')
+        ?: (filter_var(env('REVERB_ENABLED', true), FILTER_VALIDATE_BOOLEAN) ? 'reverb' : 'null'),
 
     /*
     |--------------------------------------------------------------------------

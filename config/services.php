@@ -59,4 +59,12 @@ return [
         'redirect'      => env('GOOGLE_REDIRECT_URI'),
     ],
 
+    /*
+    | Python sentiment microservice (C:\Users\HP\ai\ai-service — python app.py, port 5001)
+    */
+    'ai' => [
+        'url' => env('AI_SERVICE_URL', 'http://127.0.0.1:5001'),
+        'timeout' => (int) env('AI_SERVICE_TIMEOUT', 120),
+    ],
+
 ];

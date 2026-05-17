@@ -39,7 +39,7 @@ class ProviderBookingController extends Controller
             ->with(['customer', 'service', 'latestRescheduleRequest'])
             ->when($request->status, fn ($q) => $q->where('status', $request->status))
             ->latest('scheduled_at')
-            ->paginate(15);
+            ->paginate(min($request->integer('per_page', 15), 500));
 
         return response()->json(['data' => $bookings]);
     }
@@ -87,7 +87,7 @@ class ProviderBookingController extends Controller
                 );
             }
 
-            return $schedule;
+            return $schedule->load(['booking.customer', 'booking.service']);
         });
 
         return response()->json([

@@ -19,6 +19,41 @@ class CustomerTransportController extends Controller
         protected TransportPricingService $pricing,
     ) {}
 
+    /**
+     * Accept true/false, 1/0, "true"/"false", "on"/"off" (common in query strings & forms).
+     */
+    private function normalizeBooleanInput(Request $request, string $key, ?bool $default = null): void
+    {
+        if (! $request->exists($key)) {
+            if ($default !== null) {
+                $request->merge([$key => $default]);
+            }
+
+            return;
+        }
+
+        $value = $request->input($key);
+
+        if (is_bool($value)) {
+            return;
+        }
+
+        if (in_array($value, [1, '1', 'true', 'TRUE', 'yes', 'YES', 'on', 'ON'], true)) {
+            $request->merge([$key => true]);
+
+            return;
+        }
+
+        if (in_array($value, [0, '0', 'false', 'FALSE', 'no', 'NO', 'off', 'OFF', ''], true)) {
+            $request->merge([$key => false]);
+
+            return;
+        }
+
+        $parsed = filter_var($value, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
+        $request->merge([$key => $parsed ?? $default ?? false]);
+    }
+
     /** GET /customer/transport/route/calculate */
     public function routeCalculate(Request $request): JsonResponse
     {
@@ -60,6 +95,8 @@ class CustomerTransportController extends Controller
     /** GET /customer/transport/estimate */
     public function estimate(Request $request): JsonResponse
     {
+        $this->normalizeBooleanInput($request, 'fragile', false);
+
         $data = $request->validate([
             'mode'              => ['required', 'in:taxi,delivery'],
             'pickup_lat'       => ['required', 'numeric', 'between:-90,90'],
@@ -192,6 +229,8 @@ class CustomerTransportController extends Controller
     /** POST /customer/transport/delivery/book */
     public function bookDelivery(Request $request): JsonResponse
     {
+        $this->normalizeBooleanInput($request, 'fragile', false);
+
         $data = $request->validate([
             'pickup_location'          => ['required', 'array'],
             'pickup_location.lat'      => ['required', 'numeric', 'between:-90,90'],
@@ -205,7 +244,7 @@ class CustomerTransportController extends Controller
             'package_weight'           => ['required', 'numeric', 'min:0.01', 'max:5000'],
             'package_quantity'         => ['required', 'integer', 'min:1', 'max:999'],
             'package_type'             => ['nullable', 'string', 'max:120'],
-            'fragile'                  => ['boolean'],
+            'fragile'                  => ['nullable', 'boolean'],
         ]);
 
         $maxBike = $this->pricing->motorcycleMaxKg();

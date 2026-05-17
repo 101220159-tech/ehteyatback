@@ -118,7 +118,9 @@ class ProviderScheduleService
             ]
         );
 
-        event(new ProviderScheduleUpdated($schedule->load(['booking.customer', 'booking.service'])));
+        \App\Support\SafeBroadcast::send(
+            new ProviderScheduleUpdated($schedule->load(['booking.customer', 'booking.service']))
+        );
 
         return $schedule;
     }
