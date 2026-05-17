@@ -23,7 +23,7 @@ class SearchController extends Controller
     {
         $filters = $request->only([
             'latitude', 'longitude', 'radius_km', 'category_id', 'service_id',
-            'min_rating', 'city_id', 'sort',
+            'min_rating', 'city_id', 'zone_id', 'sort',
         ]);
 
         // Keyword/speciality search: frontends may send either `keyword` or `q`.

@@ -10,6 +10,7 @@ use App\Http\Requests\Auth\ProfileUpdateRequest;
 use App\Http\Requests\Auth\RegisterRequest;
 use App\Http\Requests\Auth\ResetPasswordRequest;
 use App\Http\Requests\FcmTokenRequest;
+use App\Http\Resources\AuthUserResource;
 use App\Http\Resources\UserResource;
 use App\Jobs\SendEmailJob;
 use App\Mail\AccountPendingMail;
@@ -24,7 +25,9 @@ use Illuminate\Auth\Events\Verified;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Password;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
@@ -96,27 +99,46 @@ class AuthController extends Controller
      */
     public function login(LoginRequest $request): JsonResponse
     {
-        $user = User::query()->where('email', $request->email)->first();
+        try {
+            $user = User::query()->where('email', $request->email)->first();
 
-        if (! $user || ! Hash::check($request->password, $user->password)) {
-            throw ValidationException::withMessages([
-                'email' => [__('auth.failed')],
-            ]);
-        }
+            if (! $user || ! Hash::check($request->password, $user->password)) {
+                throw ValidationException::withMessages([
+                    'email' => [__('auth.failed')],
+                ]);
+            }
 
-        if (! $user->hasVerifiedEmail() && $user->hasRole(['provider', 'admin', 'super_admin'])) {
+            if (! $user->hasVerifiedEmail() && $user->hasRole(['provider', 'admin', 'super_admin'])) {
+                return response()->json([
+                    'message' => 'Email address is not verified.',
+                    'errors'  => ['email' => ['Please verify your email before logging in.']],
+                ], 403);
+            }
+
+            $user->loadForApiSerialization();
+            $token = $user->createToken($request->input('device_name', 'api'))->plainTextToken;
+
             return response()->json([
-                'message' => 'Email address is not verified.',
-                'errors'  => ['email' => ['Please verify your email before logging in.']],
-            ], 403);
+                'token' => $token,
+                'user'  => new AuthUserResource($user),
+            ]);
+        } catch (ValidationException $e) {
+            throw $e;
+        } catch (QueryException $e) {
+            Log::error('Login database error', ['exception' => $e->getMessage()]);
+
+            return response()->json([
+                'message' => 'Database is unavailable. Start MySQL/MariaDB and check DB_* in .env.',
+            ], 503);
+        } catch (\Throwable $e) {
+            Log::error('Login failed', ['exception' => $e]);
+
+            return response()->json([
+                'message' => config('app.debug')
+                    ? $e->getMessage()
+                    : 'Login failed. Please try again.',
+            ], 500);
         }
-
-        $token = $user->createToken($request->input('device_name', 'api'))->plainTextToken;
-
-        return response()->json([
-            'token' => $token,
-            'user'  => new UserResource($user->loadForApiSerialization()),
-        ]);
     }
 
     // ── Google OAuth ───────────────────────────────────────────────────────
@@ -181,9 +203,9 @@ class AuthController extends Controller
     /**
      * Get the authenticated user.
      */
-    public function me(Request $request): UserResource
+    public function me(Request $request): AuthUserResource
     {
-        return new UserResource($request->user()->loadForApiSerialization());
+        return new AuthUserResource($request->user()->loadForApiSerialization());
     }
 
     /**

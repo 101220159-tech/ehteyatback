@@ -65,8 +65,13 @@ class SearchService
             $filters['zone_id'] = $this->zoneDetector->detectZoneId($lat, $lng);
         }
 
+        // Zone filter: local providers in the customer's zone + all VIP providers (any zone).
         if (! empty($filters['zone_id'])) {
-            $query->whereHas('zones', fn ($q) => $q->where('zones.id', $filters['zone_id']));
+            $zoneId = $filters['zone_id'];
+            $query->where(function (Builder $q) use ($zoneId) {
+                $q->where('providers.is_vip', true)
+                    ->orWhereHas('zones', fn ($zq) => $zq->where('zones.id', $zoneId));
+            });
         }
 
         $driver = Provider::query()->getConnection()->getDriverName();
@@ -74,23 +79,25 @@ class SearchService
         // Use providers.latitude / providers.longitude — no JOIN needed, no GROUP BY issue.
         // Embed float values directly (safe — not user strings) to avoid binding conflicts with withCount.
         if ($lat !== null && $lng !== null && $driver === 'mysql') {
-            $haversine = "(6371 * acos(least(1, greatest(-1,
+            $haversine = "(CASE WHEN providers.latitude IS NOT NULL AND providers.longitude IS NOT NULL
+                THEN (6371 * acos(least(1, greatest(-1,
                 cos(radians({$lat})) * cos(radians(providers.latitude)) * cos(radians(providers.longitude) - radians({$lng}))
                 + sin(radians({$lat})) * sin(radians(providers.latitude))
-            )))) AS distance_km";
+            )))) ELSE NULL END) AS distance_km";
 
-            // addSelect appends without replacing the existing providers.* set by withCount
-            $query->whereNotNull('providers.latitude')
-                  ->whereNotNull('providers.longitude')
-                  ->addSelect(\DB::raw($haversine));
+            // VIP providers may appear without coordinates; others need lat/lng for distance.
+            $query->where(function (Builder $q) {
+                $q->where('providers.is_vip', true)
+                    ->orWhere(function (Builder $q2) {
+                        $q2->whereNotNull('providers.latitude')->whereNotNull('providers.longitude');
+                    });
+            })->addSelect(DB::raw($haversine));
 
             // Only apply radius cut-off when NO zone is specified.
-            // When a zone_id is present it already limits the service area — adding a km cap
-            // would silently exclude providers who are assigned to that zone but happen to be
-            // farther than the radius from the customer's exact pin.
+            // VIP providers are always listed regardless of distance.
             $zoneIsActive = ! empty($filters['zone_id']);
             if ($radiusKm && ! $zoneIsActive) {
-                $query->havingRaw("distance_km <= {$radiusKm}");
+                $query->havingRaw("(providers.is_vip = 1 OR distance_km <= {$radiusKm})");
             }
         }
 
