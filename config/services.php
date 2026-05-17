@@ -67,4 +67,13 @@ return [
         'timeout' => (int) env('AI_SERVICE_TIMEOUT', 120),
     ],
 
+    /*
+    | Customer retention / reorder probability (retention-service — port 5002)
+    */
+    'retention' => [
+        'url' => env('RETENTION_SERVICE_URL', 'http://127.0.0.1:5002'),
+        'timeout' => (int) env('RETENTION_SERVICE_TIMEOUT', 120),
+        'api_key' => env('RETENTION_API_KEY', 'dev-retention-key'),
+    ],
+
 ];

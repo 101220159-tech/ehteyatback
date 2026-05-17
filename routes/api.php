@@ -269,6 +269,8 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
 
         // Reviews
         Route::get('reviews',                       [ProviderReviewController::class, 'index']);
+        Route::get('reviews/customers',             [ProviderReviewController::class, 'customersSummary']);
+        Route::get('reviews/retention',            [ProviderReviewController::class, 'retentionInsights']);
         Route::get('reviews/analyze',               [ProviderReviewController::class, 'analyze']);
 
         // Chat
