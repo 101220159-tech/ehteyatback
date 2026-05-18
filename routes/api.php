@@ -25,6 +25,7 @@ use App\Http\Controllers\Api\V1\Customer\CustomerZoneController;
 use App\Http\Controllers\Api\V1\Customer\CustomerBookingController;
 use App\Http\Controllers\Api\V1\Customer\CustomerChatController;
 use App\Http\Controllers\Api\V1\Customer\CustomerDashboardController;
+use App\Http\Controllers\Api\V1\Customer\CustomerEmergencyPlaceController;
 use App\Http\Controllers\Api\V1\Customer\CustomerNotificationController;
 use App\Http\Controllers\Api\V1\Customer\CustomerProfileController;
 use App\Http\Controllers\Api\V1\Customer\CustomerReviewController;
@@ -158,6 +159,16 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
 
         // Addresses
         Route::apiResource('addresses', CustomerAddressController::class)->whereUuid('addresses');
+
+        // Emergency map (nearby Places via server key + history & favorites)
+        Route::prefix('emergency')->group(function () {
+            Route::get('nearby', [CustomerEmergencyPlaceController::class, 'nearby']);
+            Route::get('history', [CustomerEmergencyPlaceController::class, 'historyIndex']);
+            Route::post('history', [CustomerEmergencyPlaceController::class, 'historyStore']);
+            Route::get('favorites', [CustomerEmergencyPlaceController::class, 'favoritesIndex']);
+            Route::post('favorites', [CustomerEmergencyPlaceController::class, 'favoritesStore']);
+            Route::delete('favorites/{id}', [CustomerEmergencyPlaceController::class, 'favoritesDestroy'])->whereNumber('id');
+        });
 
         // Profile / location
         Route::post('profile/avatar',               [CustomerProfileController::class, 'storeAvatar']);

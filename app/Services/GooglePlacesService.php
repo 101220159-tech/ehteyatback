@@ -102,6 +102,113 @@ class GooglePlacesService
         });
     }
 
+    /**
+     * Nearby Search for emergency POIs (hospitals, pharmacies).
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    public function nearbyEmergency(float $latitude, float $longitude, string $type, int $radiusMeters = 8000): array
+    {
+        if (! $this->apiKey) {
+            throw new \RuntimeException('Google Maps API key is not configured (GOOGLE_MAPS_API_KEY).');
+        }
+
+        $type = in_array($type, ['hospital', 'pharmacy'], true) ? $type : 'hospital';
+        $radiusMeters = max(500, min(50000, $radiusMeters));
+
+        $cacheKey = sprintf(
+            'gplaces_nearby_%s_%s_%s_%d',
+            round($latitude, 4),
+            round($longitude, 4),
+            $type,
+            $radiusMeters,
+        );
+
+        return Cache::remember($cacheKey, 300, function () use ($latitude, $longitude, $type, $radiusMeters) {
+            $response = Http::timeout(15)->get('https://maps.googleapis.com/maps/api/place/nearbysearch/json', [
+                'location' => $latitude.','.$longitude,
+                'radius' => $radiusMeters,
+                'type' => $type,
+                'key' => $this->apiKey,
+            ]);
+
+            if (! $response->successful()) {
+                throw new \RuntimeException('Google Places Nearby Search request failed.');
+            }
+
+            $status = $response->json('status');
+            if ($status === 'ZERO_RESULTS') {
+                return [];
+            }
+            if ($status !== 'OK') {
+                $message = $response->json('error_message') ?? $status;
+                throw new \RuntimeException('Google Places Nearby Search: '.$message);
+            }
+
+            $results = $response->json('results') ?? [];
+            $out = [];
+
+            foreach ($results as $row) {
+                $loc = $row['geometry']['location'] ?? null;
+                $lat = isset($loc['lat']) ? (float) $loc['lat'] : null;
+                $lng = isset($loc['lng']) ? (float) $loc['lng'] : null;
+                $placeId = $row['place_id'] ?? null;
+                $name = $row['name'] ?? null;
+
+                if (! is_string($placeId) || $placeId === '' || ! is_string($name) || $name === '' || $lat === null || $lng === null) {
+                    continue;
+                }
+
+                $distanceKm = self::haversineKm($latitude, $longitude, $lat, $lng);
+                $hours = $row['opening_hours'] ?? null;
+                $openNow = is_array($hours) ? ($hours['open_now'] ?? null) : null;
+                $openStatus = $openNow === true ? 'open' : ($openNow === false ? 'closed' : 'unknown');
+                $openLabel = $openNow === true ? 'Open now' : ($openNow === false ? 'Closed now' : 'Hours unknown');
+
+                $out[] = [
+                    'place_id' => $placeId,
+                    'name' => $name,
+                    'address' => $row['vicinity'] ?? $row['formatted_address'] ?? null,
+                    'lat' => $lat,
+                    'lng' => $lng,
+                    'latitude' => $lat,
+                    'longitude' => $lng,
+                    'distance_km' => round($distanceKm, 3),
+                    'distance_label' => self::formatDistanceKm($distanceKm),
+                    'open_status' => $openStatus,
+                    'open_label' => $openLabel,
+                    'place_type' => $type,
+                    'filter_type' => $type,
+                    'rating' => isset($row['rating']) ? (float) $row['rating'] : null,
+                    'user_ratings_total' => (int) ($row['user_ratings_total'] ?? 0),
+                ];
+            }
+
+            usort($out, fn ($a, $b) => ($a['distance_km'] ?? 999) <=> ($b['distance_km'] ?? 999));
+
+            return $out;
+        });
+    }
+
+    private static function haversineKm(float $lat1, float $lng1, float $lat2, float $lng2): float
+    {
+        $earthKm = 6371.0;
+        $dLat = deg2rad($lat2 - $lat1);
+        $dLng = deg2rad($lng2 - $lng1);
+        $a = sin($dLat / 2) ** 2 + cos(deg2rad($lat1)) * cos(deg2rad($lat2)) * sin($dLng / 2) ** 2;
+
+        return $earthKm * 2 * asin(min(1.0, sqrt($a)));
+    }
+
+    private static function formatDistanceKm(float $km): string
+    {
+        if ($km < 1) {
+            return (string) (int) round($km * 1000).' m';
+        }
+
+        return number_format($km, 1).' km';
+    }
+
     public function getPlaceDetails(string $placeId): ?array
     {
         if (! $this->apiKey) {
