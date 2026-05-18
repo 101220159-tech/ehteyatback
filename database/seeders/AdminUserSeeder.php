@@ -20,7 +20,7 @@ class AdminUserSeeder extends Seeder
             ['email' => 'admin@sp-platform.test'],
             [
                 'name'              => 'Super Admin',
-                'password'          => 'Admin@1234',
+                'password'          => 'password',
                 'email_verified_at' => now(),
                 'role_id'           => $roleId,
             ]
