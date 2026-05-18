@@ -5,6 +5,8 @@ namespace App\Services;
 use App\Models\Booking;
 use App\Models\DeliveryBooking;
 use App\Models\Provider;
+use App\Models\ProviderEarning;
+use App\Models\Review;
 use App\Models\Service;
 use App\Models\TaxiBooking;
 use App\Models\User;
@@ -51,6 +53,7 @@ class StatisticsService
                 'total' => Service::query()->count(),
             ],
             'bookings' => [
+                'total_all_time' => Booking::query()->count(),
                 'total_in_period' => (clone $bookingsInPeriod)->count(),
                 'pending' => Booking::query()->where('status', 'pending')->count(),
                 'accepted' => Booking::query()->where('status', 'accepted')->count(),
@@ -62,7 +65,66 @@ class StatisticsService
                     ->sum('price'),
             ],
             'transport' => $this->transportSummary($from, $to),
+            'earnings' => [
+                'total_all_time' => (float) ProviderEarning::query()->sum('amount'),
+            ],
+            'reviews' => [
+                'total' => Review::query()->count(),
+                'average_rating' => round((float) Review::query()->avg('rating'), 2),
+                'positive' => Review::query()->where('rating', '>=', 4)->count(),
+                'negative' => Review::query()->where('rating', '<=', 2)->count(),
+            ],
+            'providers_directory' => $this->providersDirectory(),
         ];
+    }
+
+    /**
+     * Per-provider bookings & earnings for admin overview.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    public function providersDirectory(): array
+    {
+        return Provider::query()
+            ->with(['user:id,name,email,phone'])
+            ->withCount([
+                'reviews',
+                'bookings',
+                'bookings as completed_bookings_count' => fn ($q) => $q->where('status', 'completed'),
+                'bookings as pending_bookings_count' => fn ($q) => $q->where('status', 'pending'),
+            ])
+            ->withSum('earnings as earnings_total', 'amount')
+            ->orderByDesc('rating_avg')
+            ->orderBy('created_at')
+            ->get()
+            ->map(function (Provider $provider) {
+                $reviewsTotal = (int) ($provider->reviews_count ?? $provider->total_reviews ?? 0);
+
+                return [
+                    'id' => $provider->id,
+                    'name' => $provider->user?->name,
+                    'email' => $provider->user?->email,
+                    'phone' => $provider->user?->phone,
+                    'user' => $provider->user ? [
+                        'name' => $provider->user->name,
+                        'email' => $provider->user->email,
+                        'phone' => $provider->user->phone,
+                    ] : null,
+                    'rating_avg' => (float) ($provider->rating_avg ?? 0),
+                    'total_reviews' => $reviewsTotal,
+                    'reviews_count' => $reviewsTotal,
+                    'is_active' => (bool) $provider->is_active,
+                    'is_verified' => (bool) $provider->is_verified,
+                    'is_vip' => (bool) $provider->is_vip,
+                    'bookings_count' => (int) ($provider->bookings_count ?? 0),
+                    'bookings_total' => (int) ($provider->bookings_count ?? 0),
+                    'completed_bookings_count' => (int) ($provider->completed_bookings_count ?? 0),
+                    'pending_bookings_count' => (int) ($provider->pending_bookings_count ?? 0),
+                    'earnings_total' => (float) ($provider->earnings_total ?? 0),
+                ];
+            })
+            ->values()
+            ->all();
     }
 
     /**

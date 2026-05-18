@@ -122,6 +122,11 @@ class Provider extends Model
         return $this->hasMany(Payment::class);
     }
 
+    public function earnings(): HasMany
+    {
+        return $this->hasMany(ProviderEarning::class);
+    }
+
     // ── Helpers ────────────────────────────────────────────────────────────
 
     public function hasActiveSubscription(): bool

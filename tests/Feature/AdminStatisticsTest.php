@@ -39,6 +39,9 @@ class AdminStatisticsTest extends TestCase
                     'users',
                     'bookings',
                     'transport',
+                    'earnings',
+                    'reviews',
+                    'providers_directory',
                 ],
             ]);
     }

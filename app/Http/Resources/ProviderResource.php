@@ -20,6 +20,12 @@ class ProviderResource extends JsonResource
             'rating_avg'              => $this->rating_avg,
             'total_reviews'           => $this->total_reviews,
             'reviews_count'           => $this->whenCounted('reviews'),
+            'bookings_count'          => $this->whenCounted('bookings'),
+            'completed_bookings_count'=> $this->whenCounted('completed_bookings_count'),
+            'earnings_total'          => $this->when(
+                isset($this->earnings_total),
+                fn () => (float) $this->earnings_total,
+            ),
             'is_active'               => $this->is_active,
             'is_busy'                 => $this->is_busy,
             'is_verified'             => $this->is_verified,

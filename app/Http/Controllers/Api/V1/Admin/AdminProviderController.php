@@ -85,7 +85,13 @@ class AdminProviderController extends Controller
     {
         $query = Provider::query()
             ->with(['user', 'zones'])
-            ->withCount(['reviews', 'zones'])
+            ->withCount([
+                'reviews',
+                'zones',
+                'bookings',
+                'bookings as completed_bookings_count' => fn ($q) => $q->where('status', 'completed'),
+            ])
+            ->withSum('earnings as earnings_total', 'amount')
             ->orderByDesc('created_at');
 
         if ($request->filled('search')) {
