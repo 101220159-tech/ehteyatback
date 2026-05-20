@@ -363,6 +363,7 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
         Route::post('providers/{providerId}/projects/{pId}/images', [AdminProviderProjectController::class, 'uploadImages'])->whereUuid('providerId')->whereUuid('pId');
 
         // Services & Categories
+        Route::get('services/booking-stats',        [AdminServiceController::class, 'bookingStats']);
         Route::get('services',                      [AdminServiceController::class, 'index']);
         Route::post('services',                     [AdminServiceController::class, 'store']);
         Route::put('services/{id}',                 [AdminServiceController::class, 'update'])->whereUuid('id');
@@ -380,6 +381,7 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
         Route::get('zones/{id}',                    [AdminZoneController::class, 'show'])->whereUuid('id');
         Route::put('zones/{id}',                    [AdminZoneController::class, 'update'])->whereUuid('id');
         Route::delete('zones/{id}',                 [AdminZoneController::class, 'destroy'])->whereUuid('id');
+        Route::get('zones/{id}/area-booking-stats',  [AdminZoneController::class, 'areaBookingStats'])->whereUuid('id');
         Route::get('zones/{id}/providers',          [AdminZoneController::class, 'zoneProviders'])->whereUuid('id');
         Route::post('zones/{id}/assign-providers',  [AdminZoneController::class, 'assignProvider'])->whereUuid('id');
         Route::delete('zones/{id}/providers/{pId}', [AdminZoneController::class, 'removeProvider'])->whereUuid('id')->whereUuid('pId');

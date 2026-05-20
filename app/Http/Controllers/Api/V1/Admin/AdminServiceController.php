@@ -9,6 +9,7 @@ use App\Models\Service;
 use App\Traits\HandlesImageUpload;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class AdminServiceController extends Controller
 {
@@ -19,6 +20,50 @@ class AdminServiceController extends Controller
         $items = Service::query()->with('category')->orderBy('name')->paginate($request->integer('per_page', 20));
 
         return ServiceResource::collection($items)->response();
+    }
+
+    /**
+     * Booking counts grouped by category and by service (for admin charts).
+     */
+    public function bookingStats(): JsonResponse
+    {
+        $categories = DB::table('service_categories')
+            ->leftJoin('services', 'services.category_id', '=', 'service_categories.id')
+            ->leftJoin('bookings', 'bookings.service_id', '=', 'services.id')
+            ->select(
+                'service_categories.id',
+                'service_categories.name',
+                DB::raw('COUNT(bookings.id) as bookings_count')
+            )
+            ->groupBy('service_categories.id', 'service_categories.name')
+            ->orderByDesc('bookings_count')
+            ->get()
+            ->map(fn ($row) => [
+                'id'              => $row->id,
+                'name'            => $row->name,
+                'bookings_count'  => (int) $row->bookings_count,
+            ]);
+
+        $services = Service::query()
+            ->with('category:id,name')
+            ->withCount('bookings')
+            ->orderByDesc('bookings_count')
+            ->orderBy('name')
+            ->get()
+            ->map(fn (Service $s) => [
+                'id'              => $s->id,
+                'name'            => $s->name,
+                'category_id'     => $s->category_id,
+                'category_name'   => $s->category?->name,
+                'bookings_count'  => (int) $s->bookings_count,
+            ]);
+
+        return response()->json([
+            'data' => [
+                'categories' => $categories,
+                'services'   => $services,
+            ],
+        ]);
     }
 
     public function byCategory(string $categoryId): JsonResponse

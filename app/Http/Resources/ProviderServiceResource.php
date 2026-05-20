@@ -17,6 +17,7 @@ class ProviderServiceResource extends JsonResource
             'provider_id' => $this->provider_id,
             'service_id' => $this->service_id,
             'price' => $this->price,
+            'bookings_count' => (int) ($this->bookings_count ?? 0),
             'service' => new ServiceResource($this->whenLoaded('service')),
             'created_at' => $this->created_at,
             'updated_at' => $this->updated_at,

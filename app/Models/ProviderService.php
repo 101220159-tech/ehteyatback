@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class ProviderService extends Model
 {
@@ -27,5 +28,12 @@ class ProviderService extends Model
     public function service(): BelongsTo
     {
         return $this->belongsTo(Service::class);
+    }
+
+    /** Bookings for this provider + catalog service. */
+    public function bookings(): HasMany
+    {
+        return $this->hasMany(Booking::class, 'service_id', 'service_id')
+            ->whereColumn('bookings.provider_id', 'provider_services.provider_id');
     }
 }

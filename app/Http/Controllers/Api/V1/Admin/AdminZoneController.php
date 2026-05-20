@@ -3,10 +3,11 @@
 namespace App\Http\Controllers\Api\V1\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Models\Booking;
 use App\Models\Zone;
+use App\Services\ZoneDetectionService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Validation\ValidationException;
 
 /**
  * @group Admin — Zones
@@ -101,6 +102,48 @@ class AdminZoneController extends Controller
             'message'  => count($data['zone_ids']).' zone(s) assigned to provider.',
             'zone_ids' => $data['zone_ids'],
         ]);
+    }
+
+    /**
+     * Booking counts per area in this zone (customer address lat/lng inside each area polygon).
+     */
+    public function areaBookingStats(string $id, ZoneDetectionService $zoneDetection): JsonResponse
+    {
+        $zone = Zone::with('areas')->findOrFail($id);
+
+        $rows = [];
+        foreach ($zone->areas as $area) {
+            $rows[$area->id] = [
+                'id'              => $area->id,
+                'name'            => $area->name,
+                'bookings_count'  => 0,
+            ];
+        }
+
+        $bookings = Booking::query()
+            ->whereNotNull('customer_latitude')
+            ->whereNotNull('customer_longitude')
+            ->get(['id', 'customer_latitude', 'customer_longitude']);
+
+        foreach ($bookings as $booking) {
+            $lat = (float) $booking->customer_latitude;
+            $lng = (float) $booking->customer_longitude;
+
+            foreach ($zone->areas as $area) {
+                $polygon = $area->coordinates;
+                if (! is_array($polygon) || count($polygon) < 3) {
+                    continue;
+                }
+                if ($zoneDetection->pointInPolygon($lat, $lng, $polygon)) {
+                    if (isset($rows[$area->id])) {
+                        $rows[$area->id]['bookings_count']++;
+                    }
+                    break;
+                }
+            }
+        }
+
+        return response()->json(['data' => array_values($rows)]);
     }
 
     /**

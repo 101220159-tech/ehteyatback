@@ -25,6 +25,7 @@ class ProviderServiceController extends Controller
         $items = ProviderService::query()
             ->where('provider_id', $provider->id)
             ->with(['service.category'])
+            ->withCount('bookings')
             ->orderBy('id')
             ->paginate($request->integer('per_page', 20));
 
@@ -48,7 +49,9 @@ class ProviderServiceController extends Controller
             $row->update(['price' => $data['price']]);
         }
 
-        return (new ProviderServiceResource($row->load(['service.category'])))->response()->setStatusCode(201);
+        $row->load(['service.category'])->loadCount('bookings');
+
+        return (new ProviderServiceResource($row))->response()->setStatusCode(201);
     }
 
     public function update(Request $request, string $id): ProviderServiceResource
@@ -60,7 +63,10 @@ class ProviderServiceController extends Controller
         ]);
         $row->update($data);
 
-        return new ProviderServiceResource($row->fresh()->load(['service.category']));
+        $row = $row->fresh()->load(['service.category']);
+        $row->loadCount('bookings');
+
+        return new ProviderServiceResource($row);
     }
 
     public function destroy(Request $request, string $id): JsonResponse

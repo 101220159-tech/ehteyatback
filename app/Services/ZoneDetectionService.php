@@ -52,7 +52,7 @@ class ZoneDetectionService
      * Ray-casting algorithm — returns true if ($lat, $lng) is inside $polygon.
      * Polygon is an array of ['lat' => x, 'lng' => y] or ['latitude' => x, 'longitude' => y].
      */
-    private function pointInPolygon(float $lat, float $lng, array $polygon): bool
+    public function pointInPolygon(float $lat, float $lng, array $polygon): bool
     {
         $inside = false;
         $n      = count($polygon);
