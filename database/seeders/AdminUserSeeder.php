@@ -16,11 +16,14 @@ class AdminUserSeeder extends Seeder
             return;
         }
 
-        User::query()->firstOrCreate(
-            ['email' => 'admin@sp-platform.test'],
+        $email = (string) env('ADMIN_EMAIL', 'admin@sp-platform.test');
+        $password = (string) env('ADMIN_PASSWORD', 'Admin@1234');
+
+        User::query()->updateOrCreate(
+            ['email' => $email],
             [
-                'name'              => 'Super Admin',
-                'password'          => 'password',
+                'name'              => (string) env('ADMIN_NAME', 'Super Admin'),
+                'password'          => $password,
                 'email_verified_at' => now(),
                 'role_id'           => $roleId,
             ]

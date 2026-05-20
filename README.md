@@ -27,10 +27,10 @@ NexVex backend: Laravel API with Sanctum token authentication, custom RBAC (role
    php artisan migrate:fresh --seed
    ```
 
-4. Default admin (after seeding):
+4. Default admin (after seeding — set `ADMIN_EMAIL` / `ADMIN_PASSWORD` in `.env`):
 
    - Email: `admin@sp-platform.test`
-   - Password: `password`
+   - Password: `Admin@1234`
 
 5. Run the app:
 

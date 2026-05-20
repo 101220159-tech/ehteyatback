@@ -100,9 +100,13 @@ class AuthController extends Controller
     public function login(LoginRequest $request): JsonResponse
     {
         try {
-            $user = User::query()->where('email', $request->email)->first();
+            // Case-insensitive + trimmed match (see backend AuthController login).
+            $normalizedEmail = mb_strtolower(trim((string) $request->validated('email')));
+            $user = User::query()
+                ->whereRaw('LOWER(TRIM(email)) = ?', [$normalizedEmail])
+                ->first();
 
-            if (! $user || ! Hash::check($request->password, $user->password)) {
+            if (! $user || ! is_string($user->password) || $user->password === '' || ! Hash::check($request->password, $user->password)) {
                 throw ValidationException::withMessages([
                     'email' => [__('auth.failed')],
                 ]);
